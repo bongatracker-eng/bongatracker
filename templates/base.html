@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BoñgaTrack{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0b0f19',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PWA Manifest & Meta -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0b0f19">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-slate-950 text-gray-100 min-h-screen flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="bg-slate-900/85 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
+        <div class="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
+            
+            <!-- LOGO -->
+            <div class="flex items-center space-x-3">
+                <a href="/" class="flex items-center space-x-2 group">
+                    <span class="text-xl sm:text-2xl font-black tracking-tight text-white group-hover:text-emerald-400 transition">
+                        Boñga<span class="text-emerald-400">Track</span>
+                    </span>
+                </a>
+                <span class="hidden sm:inline-block text-[10px] bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full font-mono uppercase border border-slate-700">
+                    BRGY. 53, LEGAZPI CITY
+                </span>
+            </div>
+
+            <!-- DESKTOP NAVIGATION LINKS -->
+            <nav class="hidden md:flex items-center space-x-1 lg:space-x-2 text-xs font-bold uppercase tracking-wider">
+                <a href="/" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                    <i class="fas fa-chart-line text-cyan-400"></i><span>Dashboard</span>
+                </a>
+                <a href="/registration" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                    <i class="fas fa-users text-indigo-400"></i><span>Registration</span>
+                </a>
+                <a href="/inventory" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                    <i class="fas fa-boxes text-amber-400"></i><span>Inventory</span>
+                </a>
+                <a href="/analytics" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                    <i class="fas fa-chart-pie text-purple-400"></i><span>Analytics</span>
+                </a>
+                <a href="/sms" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                    <i class="fas fa-sms text-emerald-400"></i><span>SMS Alerts</span>
+                </a>
+            </nav>
+
+            <!-- RIGHT ACTIONS & MOBILE HAMBURGER BUTTON -->
+            <div class="flex items-center space-x-3">
+                <button onclick="logoutSession()" class="bg-red-950/60 hover:bg-red-900/80 border border-red-800/60 text-red-300 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md">
+                    <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+                </button>
+
+                <!-- MOBILE HAMBURGER TOGGLE -->
+                <button onclick="toggleMobileMenu()" class="md:hidden bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-xl border border-slate-700 transition">
+                    <i class="fas fa-bars text-base"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MOBILE SLIDE-OUT DRAWER MENU -->
+    <div id="mobileDrawerOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden transition-opacity opacity-0 md:hidden" onclick="toggleMobileMenu()"></div>
+    
+    <div id="mobileDrawer" class="fixed top-0 right-0 w-72 h-full bg-slate-900 border-l border-slate-800 z-50 transform translate-x-full transition-transform duration-300 ease-in-out md:hidden flex flex-col p-6 shadow-2xl">
+        <div class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <div>
+                <span class="text-lg font-black text-white">Boñga<span class="text-emerald-400">Track</span></span>
+                <p class="text-[10px] text-gray-400 uppercase font-mono mt-0.5">Navigation Menu</p>
+            </div>
+            <button onclick="toggleMobileMenu()" class="bg-slate-800 hover:bg-slate-700 text-gray-300 p-2 rounded-xl border border-slate-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <nav class="flex flex-col space-y-2 text-sm font-bold uppercase tracking-wider">
+            <a href="/" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                <i class="fas fa-chart-line text-cyan-400 w-5"></i><span>Dashboard</span>
+            </a>
+            <a href="/registration" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                <i class="fas fa-users text-indigo-400 w-5"></i><span>Registration</span>
+            </a>
+            <a href="/inventory" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                <i class="fas fa-boxes text-amber-400 w-5"></i><span>Inventory</span>
+            </a>
+            <a href="/analytics" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                <i class="fas fa-chart-pie text-purple-400 w-5"></i><span>Analytics</span>
+            </a>
+            <a href="/sms" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                <i class="fas fa-sms text-emerald-400 w-5"></i><span>SMS Alerts</span>
+            </a>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-slate-800 text-center">
+            <p class="text-[10px] text-gray-500 font-mono">BoñgaTrack CDRRMO v2.6</p>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT BLOCK -->
+    {% block content %}{% endblock %}
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-900 border-t border-slate-800 text-gray-500 text-xs py-4 text-center mt-auto">
+        <p>&copy; 2026 BoñgaTrack Disaster Management System &bull; Brgy. 53, Legazpi City</p>
+    </footer>
+
+    <!-- GLOBAL SCRIPTS -->
+    <script>
+        function toggleMobileMenu() {
+            const drawer = document.getElementById('mobileDrawer');
+            const overlay = document.getElementById('mobileDrawerOverlay');
+            
+            if (drawer.classList.contains('translate-x-full')) {
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+                drawer.classList.remove('translate-x-full');
+            } else {
+                drawer.classList.add('translate-x-full');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        }
+
+        async function logoutSession() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch(e) {
+                window.location.href = '/login';
+            }
+        }
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then((reg) => console.log('ServiceWorker registered! Scope:', reg.scope))
+                    .catch((err) => console.log('ServiceWorker registration failed:', err));
+            });
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

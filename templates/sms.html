@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}SMS Broadcast - BoñgaTrack{% endblock %}
+
+{% block content %}
+<main class="container mx-auto px-6 py-8 flex-grow">
+    <div class="flex items-center space-x-3 mb-6 border-b border-slate-700 pb-4">
+        <i class="fas fa-sms text-3xl text-emerald-400"></i>
+        <div>
+            <h1 class="text-3xl font-bold text-white tracking-wide">SMS Emergency Broadcast</h1>
+            <p class="text-gray-400 text-sm mt-1">Dispatch text messages via Local SIM Gateway directly to registered mobiles.</p>
+        </div>
+    </div>
+
+    <div class="bg-indigo-900/30 border border-indigo-500/40 rounded-xl p-4 mb-6 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <i class="fas fa-info-circle text-indigo-400 text-xl"></i>
+            <p class="text-xs text-indigo-200">Local SIM SMS gateway is configured. Messages will broadcast to active mobile numbers registered in the master resident database.</p>
+        </div>
+        <div class="text-right">
+            <p class="text-[10px] text-gray-400 uppercase font-bold">Total Reachable</p>
+            <p class="text-lg font-mono font-bold text-emerald-400" id="recipientCountDisplay">Loading...</p>
+        </div>
+    </div>
+
+    <!-- TWO COLUMN LAYOUT: FORM & PHONE PREVIEW -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto items-start">
+        
+        <!-- LEFT COLUMN: SMS FORM -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+            <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Target Sector</label>
+                <select id="smsTarget" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option value="ALL REGISTERED RESIDENTS">ALL REGISTERED RESIDENTS</option>
+                    <option value="VULNERABLE SECTORS ONLY">VULNERABLE SECTORS ONLY (Seniors, PWD, Pregnant)</option>
+                    <option value="CURRENTLY EVACUATED">CURRENTLY EVACUATED INDIVIDUALS</option>
+                </select>
+            </div>
+
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-xs font-semibold text-gray-400 uppercase">Emergency Message Body</label>
+                    <span class="text-[10px] text-gray-500 font-mono" id="charCounter">0 / 160 characters</span>
+                </div>
+                
+                <div class="flex flex-wrap gap-1 mb-2">
+                    <span class="text-[10px] text-gray-400 self-center mr-1">Quick Templates:</span>
+                    <button type="button" onclick="setTemplate('EMERGENCY EVACUATION: Mandatory evacuation order issued for Brgy. Boñga. Proceed to your assigned shelter immediately.')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-red-300 px-2 py-1 rounded border border-slate-700 transition">Mandatory Evac</button>
+                    <button type="button" onclick="setTemplate('RELIEF ANNOUNCEMENT: Family food packs are now ready for distribution at the evacuation center. Bring your QR ID.')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-emerald-300 px-2 py-1 rounded border border-slate-700 transition">Relief Open</button>
+                    <button type="button" onclick="setTemplate('WEATHER ADVISORY: Signal No. raised. Secure your homes and stay tuned for further updates from BDRRMC.')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-1 rounded border border-slate-700 transition">Typhoon Warning</button>
+                </div>
+
+                <textarea id="smsMessageBody" oninput="updateCharCount()" rows="4" placeholder="Enter emergency text message here..." class="w-full bg-slate-800 border border-slate-700 rounded-lg p-4 text-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+            </div>
+
+            <button onclick="dispatchSMS()" id="smsSendBtn" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-white transition shadow-lg shadow-emerald-950 flex items-center justify-center space-x-2">
+                <i class="fas fa-paper-plane"></i>
+                <span>Dispatch SMS Broadcast</span>
+            </button>
+
+            <p id="smsFeedback" class="text-center text-sm font-bold hidden p-3 rounded-lg"></p>
+        </div>
+
+        <!-- RIGHT COLUMN: SMARTPHONE MOCKUP PREVIEW -->
+        <div class="flex flex-col items-center justify-center">
+            <p class="text-xs text-gray-400 uppercase font-bold tracking-wider mb-3"><i class="fas fa-mobile-alt mr-1 text-emerald-400"></i> Live SMS Screen Preview</p>
+            
+            <!-- Phone Outer Bezel -->
+            <div class="w-[300px] bg-slate-950 border-4 border-slate-800 rounded-[40px] p-4 shadow-2xl relative">
+                <!-- Phone Speaker / Notch -->
+                <div class="absolute top-2 left-1/2 transform -translate-x-1/2 w-24 h-4 bg-slate-900 rounded-full flex items-center justify-center">
+                    <div class="w-10 h-1 bg-slate-800 rounded-full"></div>
+                </div>
+
+                <!-- Phone Screen -->
+                <div class="bg-slate-900 rounded-[28px] mt-6 p-4 h-[420px] flex flex-col justify-between overflow-hidden border border-slate-800 relative">
+                    
+                    <!-- Header inside phone -->
+                    <div class="text-center border-b border-slate-800 pb-2">
+                        <p class="text-[11px] font-bold text-white">BoñgaTrack Emergency</p>
+                        <p class="text-[9px] text-emerald-400">SMS Gateway Sender</p>
+                    </div>
+
+                    <!-- Message Bubble Area -->
+                    <div class="flex-grow overflow-y-auto py-3 flex flex-col justify-end space-y-2">
+                        <div class="bg-slate-800 text-gray-200 text-xs rounded-2xl rounded-bl-sm p-3 max-w-[85%] shadow-sm self-start break-words border border-slate-700">
+                            <p id="phonePreviewText" class="leading-relaxed">Type a message to preview appearance on resident mobile phones...</p>
+                            <span class="text-[8px] text-gray-400 block text-right mt-1">Just now • BoñgaTrack</span>
+                        </div>
+                    </div>
+
+                    <!-- Simulated Phone Footer -->
+                    <div class="bg-slate-950 rounded-xl p-2 text-center text-[10px] text-gray-500 border border-slate-800">
+                        <span>Messaging Service Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+window.addEventListener("load", () => {
+    fetchRecipientCount();
+});
+
+async function fetchRecipientCount() {
+    try {
+        let res = await fetch('/api/search-resident?q=');
+        let data = await res.json();
+        let validMobiles = data.filter(r => r.mobile && r.mobile !== 'N/A' && r.mobile.trim() !== '' && r.id !== 'admin');
+        document.getElementById('recipientCountDisplay').innerText = `${validMobiles.length} Numbers`;
+    } catch(e) {
+        document.getElementById('recipientCountDisplay').innerText = "1 Number";
+    }
+}
+
+function setTemplate(text) {
+    document.getElementById('smsMessageBody').value = text;
+    updateCharCount();
+}
+
+function updateCharCount() {
+    let val = document.getElementById('smsMessageBody').value;
+    document.getElementById('charCounter').innerText = `${val.length} / 160 characters`;
+    
+    let previewEl = document.getElementById('phonePreviewText');
+    if (val.trim() === "") {
+        previewEl.innerText = "Type a message to preview appearance on resident mobile phones...";
+        previewEl.classList.add("text-gray-400", "italic");
+    } else {
+        previewEl.innerText = val;
+        previewEl.classList.remove("text-gray-400", "italic");
+    }
+}
+
+async function dispatchSMS() {
+    const message = document.getElementById('smsMessageBody').value.trim();
+    const target = document.getElementById('smsTarget').value;
+    const btn = document.getElementById('smsSendBtn');
+    const feedback = document.getElementById('smsFeedback');
+
+    if (!message) {
+        feedback.innerText = "Please enter a message body.";
+        feedback.className = "text-center text-sm font-bold p-3 rounded-lg bg-red-950 text-red-400 border border-red-800";
+        feedback.classList.remove('hidden');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to broadcast this SMS to ${target}?`)) return;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Broadcasting via Local SIM...`;
+
+    try {
+        let res = await fetch('/api/sms/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message, target: target })
+        });
+        let data = await res.json();
+
+        if (data.status === "success") {
+            feedback.innerText = data.message;
+            feedback.className = "text-center text-sm font-bold p-3 rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-800";
+            document.getElementById('smsMessageBody').value = "";
+            updateCharCount();
+        } else {
+            throw new Error(data.message || "Failed to broadcast");
+        }
+    } catch (e) {
+        feedback.innerText = "Error: " + e.message;
+        feedback.className = "text-center text-sm font-bold p-3 rounded-lg bg-red-950 text-red-400 border border-red-800";
+    }
+
+    feedback.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fas fa-paper-plane mr-2"></i> Dispatch SMS Broadcast`;
+}
+</script>
+{% endblock %}

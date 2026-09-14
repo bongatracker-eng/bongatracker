@@ -1,0 +1,745 @@
+{% extends "base.html" %}
+
+{% block title %}Registration - BoñgaTrack{% endblock %}
+
+{% block content %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<main class="container mx-auto px-6 py-8 flex-grow relative z-10">
+    <div class="flex items-center space-x-3 mb-6 border-b border-slate-700 pb-4">
+        <i class="fas fa-id-card text-3xl text-cyan-400"></i>
+        <div>
+            <h1 class="text-3xl font-bold text-white tracking-wide">Resident & Evacuee Registration</h1>
+            <p class="text-gray-400 text-sm mt-1">Register households, check-in evacuees, or update resident profiles.</p>
+        </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4 mb-8">
+        <button type="button" onclick="switchTab('register')" id="tabRegister" class="px-6 py-3 rounded-xl font-bold text-sm bg-cyan-600 text-white shadow-lg transition">
+            <i class="fas fa-user-plus mr-2"></i> Household Registration
+        </button>
+        <button type="button" onclick="switchTab('checkin')" id="tabCheckin" class="px-6 py-3 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition">
+            <i class="fas fa-qrcode mr-2"></i> Evacuee Arrival Scanner
+        </button>
+        <button type="button" onclick="switchTab('editprofile')" id="tabEditProfile" class="px-6 py-3 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition" onclick="loadAllResidentsDirectory()">
+            <i class="fas fa-users-cog mr-2"></i> Resident Directory & Roster Editor
+        </button>
+    </div>
+
+    <!-- SECTION 1: REGISTER -->
+    <div id="sectionRegister" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-2 bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl space-y-6">
+            <h2 class="text-xl font-bold text-white border-b border-slate-800 pb-3">Household Information</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Household Head Full Name</label>
+                    <input type="text" id="regHeadName" placeholder="e.g. Juan Dela Cruz" oninput="this.value = this.value.replace(/[^a-zA-Z\sñÑ-]/g, '')" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Assigned Purok</label>
+                    <select id="regPurok" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                        <option value="Purok 1A">Purok 1A</option><option value="Purok 1B">Purok 1B</option><option value="Purok 2">Purok 2</option><option value="Purok 3">Purok 3</option><option value="Purok 4">Purok 4</option><option value="Purok 5">Purok 5</option><option value="Purok 6A">Purok 6A</option><option value="Purok 6B">Purok 6B</option><option value="Purok 7A">Purok 7A</option><option value="Purok 7B">Purok 7B</option><option value="Purok 8A">Purok 8A</option><option value="Purok 8B">Purok 8B</option><option value="Purok 9A">Purok 9A</option><option value="Purok 9B">Purok 9B</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Mobile Contact Number</label>
+                    <input type="text" id="regMobile" placeholder="09123456789" required maxlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Household ID (Auto-Generated)</label>
+                    <input type="text" id="regId" readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-cyan-400 font-mono font-bold text-sm">
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-800">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Family Members Roster</h3>
+                    <button type="button" onclick="addMemberRow()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-800 rounded-lg text-xs font-bold transition">
+                        <i class="fas fa-plus mr-1"></i> Add Member
+                    </button>
+                </div>
+                <div id="membersContainer" class="space-y-3"></div>
+            </div>
+
+            <button type="button" onclick="submitRegistration()" id="regBtn" class="w-full py-3.5 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-white transition shadow-lg shadow-cyan-900/40">Complete Household Registration</button>
+            <p id="regFeedback" class="text-center text-sm font-bold hidden"></p>
+        </div>
+
+        <!-- QR CARD PREVIEW -->
+        <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center text-center">
+            <div id="qrPlaceholder" class="text-gray-500 text-sm p-8">
+                <i class="fas fa-qrcode text-6xl mb-3 opacity-30"></i>
+                <p>QR ID Card preview will generate here upon completing registration.</p>
+            </div>
+            <div id="qrResultCard" class="hidden w-full flex flex-col items-center space-y-4">
+                <div class="bg-white p-4 rounded-xl shadow-2xl border-4 border-cyan-500" id="regQrContainer"></div>
+                <div class="text-center">
+                    <h3 class="text-lg font-bold text-white" id="resCardName">Juan Dela Cruz</h3>
+                    <p class="text-xs text-cyan-400 font-mono font-bold" id="resCardId">BGN-00000</p>
+                    <div class="mt-2 inline-block bg-slate-950 border border-emerald-500/50 rounded py-1 px-3">
+                        <p class="text-[10px] text-gray-400 uppercase tracking-widest">Security PIN</p>
+                        <p class="text-lg text-emerald-400 font-mono font-bold" id="resCardPin">0000</p>
+                    </div>
+                </div>
+                <button type="button" onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs text-white font-bold transition">
+                    <i class="fas fa-print mr-1"></i> Print QR ID Card
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION 2: CHECK-IN -->
+    <div id="sectionCheckin" class="hidden max-w-2xl mx-auto bg-slate-900/60 border border-slate-700/50 rounded-2xl p-8 shadow-xl space-y-6">
+        <div>
+            <h2 class="text-xl font-bold text-white mb-1"><i class="fas fa-qrcode text-cyan-400 mr-2"></i> Evacuee Arrival Check-in</h2>
+            <p class="text-xs text-gray-400">Scan resident QR code to immediately mark entire household status as "Evacuated".</p>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Designated Evacuation Shelter</label>
+            <select id="checkinCenter" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
+                <option value="Boñga Elementary School Covered Court">Boñga Elementary School Covered Court</option>
+                <option value="Boñga Barangay Hall Evacuation Shelter">Boñga Barangay Hall Evacuation Shelter</option>
+            </select>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden relative">
+            <div id="evacReader" style="width:100%;"></div>
+        </div>
+        <div id="checkinFeedback" class="text-center p-3 rounded-lg font-bold text-sm hidden"></div>
+    </div>
+
+    <!-- SECTION 3: RESIDENT DIRECTORY & ROSTER EDITOR -->
+    <div id="sectionEditProfile" class="hidden max-w-4xl mx-auto bg-slate-900/60 border border-slate-700/50 rounded-2xl p-8 shadow-xl space-y-6">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+            <h2 class="text-xl font-bold text-white">
+                <i class="fas fa-users-cog text-cyan-400 mr-2"></i> Master Resident Directory & Roster Editor
+            </h2>
+            <div class="w-72">
+                <input type="text" id="directorySearchInput" oninput="filterDirectory()" placeholder="Search name or ID..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white text-xs focus:ring-2 focus:ring-cyan-500 outline-none">
+            </div>
+        </div>
+
+        <!-- DIRECTORY TABLE / LIST -->
+        <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+            <div class="max-h-[500px] overflow-y-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-900 text-gray-400 uppercase text-[10px] sticky top-0 border-b border-slate-800">
+                        <tr>
+                            <th class="p-3">Household ID</th>
+                            <th class="p-3">Head Name</th>
+                            <th class="p-3">Purok</th>
+                            <th class="p-3">Mobile</th>
+                            <th class="p-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="directoryTableBody" class="divide-y divide-slate-800 text-sm text-gray-300">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT / ROSTER MANAGEMENT MODAL -->
+    <div id="rosterModal" class="fixed inset-0 bg-black/80 z-[9999] hidden flex items-center justify-center p-4 backdrop-blur-sm" onclick="closeRosterModal()">
+        <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl relative" onclick="event.stopPropagation()">
+            <div class="bg-cyan-700 text-white p-4 flex justify-between items-center shadow-md">
+                <h2 class="text-base font-bold tracking-wide uppercase">Manage Household Roster & Security</h2>
+                <button onclick="closeRosterModal()" class="text-white hover:text-gray-200 transition bg-cyan-800 rounded-full w-8 h-8 flex items-center justify-center border border-cyan-500 shadow-sm">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 max-h-[75vh] overflow-y-auto space-y-6">
+                <div class="grid grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                    <div>
+                        <p class="text-[10px] text-gray-400 uppercase">Household ID</p>
+                        <p id="modalResId" class="text-cyan-400 font-mono font-bold"></p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-gray-400 uppercase">Household Head</p>
+                        <p id="modalResName" class="text-white font-bold"></p>
+                    </div>
+                </div>
+
+                <!-- PIN & SECURITY -->
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                    <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2"><i class="fas fa-lock text-cyan-400 mr-1"></i> Security PIN Management</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-gray-400">Current PIN: <strong id="modalCurrentPin" class="text-emerald-400 font-mono text-base"></strong></span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <input type="text" id="modalNewPin" placeholder="New PIN (4 digits)" maxlength="6" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="flex-grow bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white outline-none">
+                        <button type="button" onclick="updateModalPin()" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded text-xs font-bold transition">Update PIN</button>
+                    </div>
+                    <p id="modalPinFeedback" class="text-[11px] font-bold mt-1 hidden"></p>
+                </div>
+
+                <!-- FAMILY ROSTER MANAGEMENT -->
+                <div>
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Family Members Roster</h3>
+                    </div>
+                    <ul id="modalRosterList" class="space-y-2 mb-4">
+                        <!-- Injected via JS -->
+                    </ul>
+
+                    <!-- Add New Member Form Inside Modal -->
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-3">
+                        <p class="text-xs font-bold text-cyan-400"><i class="fas fa-user-plus mr-1"></i> Add New Family Member</p>
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-2">
+                            <div class="md:col-span-5">
+                                <input type="text" id="newMemberName" placeholder="Full Name" oninput="this.value = this.value.replace(/[^a-zA-Z ñÑ-]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white">
+                            </div>
+                            <div class="md:col-span-2">
+                                <input type="text" id="newMemberAge" placeholder="Age" maxlength="3" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white">
+                            </div>
+                            <div class="md:col-span-3">
+                                <select id="newMemberVuln" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-white">
+                                    <option value="None">No Vulnerability</option>
+                                    <option value="Senior Citizen">Senior Citizen (60+)</option>
+                                    <option value="Pregnant / Lactating">Pregnant / Lactating</option>
+                                    <option value="PWD">PWD</option>
+                                    <option value="Single Parent">Single Parent</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <button type="button" onclick="addNewMemberToHousehold()" class="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-700 rounded py-1.5 text-xs font-bold transition">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4 flex justify-between items-center">
+                    <button type="button" onclick="deleteEntireHousehold()" class="px-4 py-2 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg text-xs font-bold transition">
+                        <i class="fas fa-trash-alt mr-1"></i> Delete Entire Household
+                    </button>
+                    <button onclick="closeRosterModal()" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition">Done / Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR PROFILE RESULT MODAL -->
+    <div id="qrResultModal" class="fixed inset-0 bg-black/80 z-[9999] hidden flex items-center justify-center p-4 backdrop-blur-sm" onclick="closeResidentProfileModal()">
+        <div class="bg-white text-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative border border-gray-200" onclick="event.stopPropagation()">
+            <div class="bg-cyan-600 text-white p-4 flex justify-between items-center shadow-md">
+                <h2 class="text-lg font-bold tracking-wide uppercase">Scanned Profile</h2>
+                <button onclick="closeResidentProfileModal()" class="text-white hover:text-gray-200 transition bg-cyan-700 rounded-full w-8 h-8 flex items-center justify-center border border-cyan-400 shadow-sm">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 max-h-[75vh] overflow-y-auto">
+                <div id="qrLoading" class="text-center py-8 hidden">
+                    <i class="fas fa-spinner fa-spin text-4xl text-cyan-600"></i>
+                    <p class="mt-3 text-gray-500 font-semibold animate-pulse">Fetching records...</p>
+                </div>
+                <div id="qrContent" class="hidden">
+                    <div class="mb-5 text-center">
+                        <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Household Head</p>
+                        <p id="qrHeadName" class="text-3xl font-black text-gray-900 mt-1"></p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-6 text-center">
+                        <div class="bg-gray-100 p-3 rounded-xl border border-gray-200">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold">Resident ID</p>
+                            <p id="qrResidentId" class="font-mono font-bold text-gray-800 tracking-tight"></p>
+                        </div>
+                        <div class="bg-gray-100 p-3 rounded-xl border border-gray-200">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold">Location</p>
+                            <p id="qrPurok" class="font-bold text-gray-800"></p>
+                        </div>
+                    </div>
+                    <h3 class="font-bold text-gray-700 text-sm mb-3 uppercase tracking-wide border-b-2 border-cyan-600 inline-block pb-1">
+                        Family Roster (<span id="qrFamilySize"></span>)
+                    </h3>
+                    <ul id="qrRosterList" class="space-y-2 mt-2 mb-6"></ul>
+                    <button onclick="closeResidentProfileModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg mt-4 flex items-center justify-center space-x-2">
+                        <i class="fas fa-check-circle text-green-400"></i>
+                        <span>Done / Close Window</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let memberCount = 0;
+let evacScannerInstance = null;
+let isEvacScanning = false;
+let activeEditingResidentId = null;
+let allResidentsCache = [];
+
+function switchTab(tab) {
+    document.getElementById("sectionRegister").classList.add("hidden");
+    document.getElementById("sectionCheckin").classList.add("hidden");
+    document.getElementById("sectionEditProfile").classList.add("hidden");
+
+    const activeClass = "px-6 py-3 rounded-xl font-bold text-sm bg-cyan-600 text-white shadow-lg transition";
+    const inactiveClass = "px-6 py-3 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition";
+    
+    document.getElementById("tabRegister").className = inactiveClass;
+    document.getElementById("tabCheckin").className = inactiveClass;
+    document.getElementById("tabEditProfile").className = inactiveClass;
+
+    if (tab === "register") {
+        document.getElementById("sectionRegister").classList.remove("hidden");
+        document.getElementById("tabRegister").className = activeClass;
+    } else if (tab === "checkin") {
+        document.getElementById("sectionCheckin").classList.remove("hidden");
+        document.getElementById("tabCheckin").className = activeClass;
+        initEvacScanner();
+    } else if (tab === "editprofile") {
+        document.getElementById("sectionEditProfile").classList.remove("hidden");
+        document.getElementById("tabEditProfile").className = activeClass;
+        loadAllResidentsDirectory();
+    }
+}
+
+function generateID() {
+    document.getElementById("regId").value = `BGN-${Math.floor(10000 + Math.random() * 90000)}`;
+}
+
+function addMemberRow() {
+    memberCount++;
+    const container = document.getElementById("membersContainer");
+    const rowId = `memberRow_${memberCount}`;
+    const row = document.createElement("div");
+    row.id = rowId;
+    row.className = "grid grid-cols-12 gap-2 items-center bg-slate-950/60 p-3 rounded-lg border border-slate-800";
+    row.innerHTML = `
+        <div class="col-span-5"><input type="text" placeholder="Member Full Name" oninput="this.value = this.value.replace(/[^a-zA-Z ñÑ-]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white mem-name"></div>
+        <div class="col-span-2"><input type="text" placeholder="Age" maxlength="3" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white mem-age"></div>
+        <div class="col-span-4">
+            <select class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-white mem-vuln">
+                <option value="None">No Vulnerability</option>
+                <option value="Senior Citizen">Senior Citizen (60+)</option>
+                <option value="Pregnant / Lactating">Pregnant / Lactating</option>
+                <option value="PWD">PWD</option>
+                <option value="Single Parent">Single Parent</option>
+            </select>
+        </div>
+        <div class="col-span-1 text-right"><button type="button" onclick="document.getElementById('${rowId}').remove()" class="text-red-400 text-xs"><i class="fas fa-trash"></i></button></div>`;
+    container.appendChild(row);
+}
+
+async function submitRegistration() {
+    const headName = document.getElementById("regHeadName").value.trim();
+    const purok = document.getElementById("regPurok").value;
+    const mobile = document.getElementById("regMobile").value.trim() || "N/A";
+    const resId = document.getElementById("regId").value;
+    const feedback = document.getElementById("regFeedback");
+    const btn = document.getElementById("regBtn");
+
+    if (!headName) {
+        feedback.innerText = "Please enter household head name.";
+        feedback.className = "text-center text-sm font-bold text-red-400 mt-2";
+        feedback.classList.remove("hidden");
+        return;
+    }
+
+    const members = [];
+    document.querySelectorAll("#membersContainer > div").forEach(row => {
+        const name = row.querySelector(".mem-name")?.value.trim() || "";
+        const age = parseInt(row.querySelector(".mem-age")?.value) || 0;
+        const vulnerability = row.querySelector(".mem-vuln")?.value || "None";
+        if (name) members.push({ name: name, age: age, vulnerability: vulnerability });
+    });
+
+    btn.disabled = true; btn.innerText = "Registering...";
+
+    try {
+        const response = await fetch("/api/register", {
+            method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ id: resId, head_name: headName, purok: purok, mobile: mobile, members: members })
+        });
+        const data = await response.json();
+        if (data.status !== "success") throw new Error(data.message || "Registration failed");
+
+        feedback.innerText = "Registration complete!";
+        feedback.className = "text-center text-sm font-bold text-green-400 mt-2";
+        feedback.classList.remove("hidden");
+
+        document.getElementById("qrPlaceholder").classList.add("hidden");
+        const qrContainer = document.getElementById("regQrContainer");
+        qrContainer.innerHTML = "";
+        new QRCode(qrContainer, { text: resId, width: 160, height: 160, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+
+        document.getElementById("resCardName").innerText = `${headName} Household`;
+        document.getElementById("resCardId").innerText = resId;
+        document.getElementById("resCardPin").innerText = data.temporary_pin;
+        document.getElementById("qrResultCard").classList.remove("hidden");
+
+        document.getElementById("regHeadName").value = "";
+        document.getElementById("regMobile").value = "";
+        document.getElementById("membersContainer").innerHTML = "";
+        memberCount = 0; generateID(); addMemberRow();
+    } catch (error) {
+        feedback.innerText = "Error: " + error.message;
+        feedback.className = "text-center text-sm font-bold text-red-400 mt-2";
+        feedback.classList.remove("hidden");
+    } finally {
+        btn.disabled = false; btn.innerText = "Complete Household Registration";
+    }
+}
+
+// -----------------------------------------------------
+// DIRECTORY & ROSTER EDITOR FUNCTIONS
+// -----------------------------------------------------
+async function loadAllResidentsDirectory() {
+    const tbody = document.getElementById("directoryTableBody");
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i> Loading directory...</td></tr>`;
+
+    try {
+        let res = await fetch('/api/search-resident?q=');
+        let data = await res.json();
+        allResidentsCache = data;
+        renderDirectoryTable(data);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-400">Failed to load directory.</td></tr>`;
+    }
+}
+
+function renderDirectoryTable(residents) {
+    const tbody = document.getElementById("directoryTableBody");
+    tbody.innerHTML = "";
+
+    if (residents.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">No registered households found.</td></tr>`;
+        return;
+    }
+
+    residents.forEach(r => {
+        if (r.id === 'admin') return; // Hide admin account from directory
+        tbody.innerHTML += `
+            <tr class="hover:bg-slate-900/50 transition">
+                <td class="p-3 font-mono text-cyan-400 font-bold">${r.id}</td>
+                <td class="p-3 font-bold text-white">${r.head_name}</td>
+                <td class="p-3 text-gray-400">${r.purok}</td>
+                <td class="p-3 text-gray-400">${r.mobile || 'N/A'}</td>
+                <td class="p-3 text-right space-x-2">
+                    <button onclick="openRosterModal('${r.id}')" class="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-bold transition shadow">
+                        <i class="fas fa-user-edit mr-1"></i> Edit / Roster
+                    </button>
+                    <button onclick="quickDeleteHousehold('${r.id}')" class="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-400 border border-red-800 rounded text-xs transition">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function filterDirectory() {
+    const q = document.getElementById("directorySearchInput").value.toLowerCase();
+    const filtered = allResidentsCache.filter(r => r.head_name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || r.purok.toLowerCase().includes(q));
+    renderDirectoryTable(filtered);
+}
+
+async function openRosterModal(residentId) {
+    activeEditingResidentId = residentId;
+    const modal = document.getElementById("rosterModal");
+    modal.classList.remove("hidden");
+
+    document.getElementById("modalResId").innerText = residentId;
+    document.getElementById("modalResName").innerText = "Loading...";
+    document.getElementById("modalCurrentPin").innerText = "...";
+    document.getElementById("modalRosterList").innerHTML = `<li class="text-center py-4 text-gray-400 text-xs">Loading family roster...</li>`;
+    document.getElementById("modalPinFeedback").classList.add("hidden");
+    document.getElementById("modalNewPin").value = "";
+
+    try {
+        let res = await fetch(`/api/resident/${residentId}`);
+        let data = await res.json();
+
+        if (data.status === "success") {
+            document.getElementById("modalResName").innerText = data.resident.head_name;
+            // Also fetch resident pin if available
+            let match = allResidentsCache.find(r => r.id === residentId);
+            document.getElementById("modalCurrentPin").innerText = match ? match.pin_hash : "N/A";
+
+            renderModalRoster(data.resident.members);
+        }
+    } catch (e) {
+        alert("Failed to load household details.");
+    }
+}
+
+function renderModalRoster(members) {
+    const list = document.getElementById("modalRosterList");
+    list.innerHTML = "";
+
+    if (members.length === 0) {
+        list.innerHTML = `<li class="text-center py-3 text-gray-400 text-xs">No family members registered under this household.</li>`;
+        return;
+    }
+
+    members.forEach(m => {
+        list.innerHTML += `
+            <li class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center text-xs">
+                <div>
+                    <p class="font-bold text-white">${m.full_name} <span class="text-gray-400 font-normal">(${m.age} yrs)</span></p>
+                    <p class="text-[10px] text-cyan-400 mt-0.5">Vulnerability: ${m.vulnerability}</p>
+                </div>
+                <button onclick="deleteFamilyMember(${m.id})" class="text-red-400 hover:text-red-300 p-1.5 transition">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </li>
+        `;
+    });
+}
+
+async function addNewMemberToHousehold() {
+    const name = document.getElementById("newMemberName").value.trim();
+    const age = parseInt(document.getElementById("newMemberAge").value) || 0;
+    const vuln = document.getElementById("newMemberVuln").value;
+
+    if (!name) {
+        alert("Please enter member full name.");
+        return;
+    }
+
+    try {
+        let res = await fetch(`/api/resident/${activeEditingResidentId}/add-member`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ full_name: name, age: age, vulnerability: vuln })
+        });
+        let data = await res.json();
+        if (data.status === "success") {
+            document.getElementById("newMemberName").value = "";
+            document.getElementById("newMemberAge").value = "";
+            // Refresh modal roster
+            openRosterModal(activeEditingResidentId);
+        }
+    } catch (e) {
+        alert("Error adding family member.");
+    }
+}
+
+async function deleteFamilyMember(memberId) {
+    if (!confirm("Are you sure you want to remove this family member?")) return;
+
+    try {
+        let res = await fetch(`/api/member/${memberId}/delete`, { method: "POST" });
+        let data = await res.json();
+        if (data.status === "success") {
+            openRosterModal(activeEditingResidentId);
+        }
+    } catch (e) {
+        alert("Error deleting family member.");
+    }
+}
+
+async function updateModalPin() {
+    const newPin = document.getElementById("modalNewPin").value.trim();
+    const feedback = document.getElementById("modalPinFeedback");
+
+    if (!newPin || newPin.length < 4) {
+        feedback.innerText = "Please enter at least 4 digits.";
+        feedback.className = "text-[11px] font-bold mt-1 text-red-400";
+        feedback.classList.remove("hidden");
+        return;
+    }
+
+    try {
+        let res = await fetch("/api/change-pin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resident_id: activeEditingResidentId, new_pin: newPin })
+        });
+        let data = await res.json();
+        if (data.status === "success") {
+            document.getElementById("modalCurrentPin").innerText = newPin;
+            document.getElementById("modalNewPin").value = "";
+            feedback.innerText = "PIN updated successfully!";
+            feedback.className = "text-[11px] font-bold mt-1 text-green-400";
+            feedback.classList.remove("hidden");
+            loadAllResidentsDirectory();
+        }
+    } catch (e) {
+        feedback.innerText = "Error updating PIN.";
+        feedback.className = "text-[11px] font-bold mt-1 text-red-400";
+        feedback.classList.remove("hidden");
+    }
+}
+
+async function quickDeleteHousehold(residentId) {
+    if (!confirm(`WARNING: Delete household ${residentId} and all its records? This cannot be undone.`)) return;
+
+    try {
+        let res = await fetch(`/api/resident/${residentId}/delete`, { method: "POST" });
+        let data = await res.json();
+        if (data.status === "success") {
+            loadAllResidentsDirectory();
+        }
+    } catch (e) {
+        alert("Error deleting household.");
+    }
+}
+
+async function deleteEntireHousehold() {
+    if (!confirm(`CRITICAL WARNING: Are you sure you want to delete household ${activeEditingResidentId}? All family members, claims, and history will be wiped.`)) return;
+
+    try {
+        let res = await fetch(`/api/resident/${activeEditingResidentId}/delete`, { method: "POST" });
+        let data = await res.json();
+        if (data.status === "success") {
+            closeRosterModal();
+            loadAllResidentsDirectory();
+        }
+    } catch (e) {
+        alert("Error deleting household.");
+    }
+}
+
+function closeRosterModal() {
+    document.getElementById("rosterModal").classList.add("hidden");
+    activeEditingResidentId = null;
+}
+// -----------------------------------------------------
+
+function extractResidentId(decodedText) {
+    const raw = String(decodedText || "").trim();
+    try {
+        const qrData = JSON.parse(raw);
+        if (qrData && typeof qrData === "object") return String(qrData.id || "").trim();
+    } catch (e) {}
+    return raw;
+}
+
+function closeResidentProfileModal() {
+    document.getElementById('qrResultModal').classList.add('hidden');
+    isEvacScanning = false;
+}
+
+async function showResidentProfileModal(scannedId) {
+    const modal = document.getElementById('qrResultModal');
+    const loading = document.getElementById('qrLoading');
+    const content = document.getElementById('qrContent');
+    
+    modal.classList.remove('hidden');
+    loading.classList.remove('hidden');
+    content.classList.add('hidden');
+
+    try {
+        const response = await fetch(`/api/resident/${scannedId}`);
+        const data = await response.json();
+
+        if (data.status === "success") {
+            document.getElementById('qrHeadName').innerText = data.resident.head_name;
+            document.getElementById('qrResidentId').innerText = data.resident.id;
+            document.getElementById('qrPurok').innerText = data.resident.purok;
+            document.getElementById('qrFamilySize').innerText = data.resident.family_size;
+
+            const rosterList = document.getElementById('qrRosterList');
+            rosterList.innerHTML = ""; 
+            
+            data.resident.members.forEach(member => {
+                let isEvac = member.status && member.status.toUpperCase() === "EVACUATED";
+                let badgeColor = isEvac ? "bg-green-100 text-green-700 border-green-200" : "bg-yellow-100 text-yellow-700 border-yellow-200";
+                let vulnText = (member.vulnerability && member.vulnerability !== "None") ? ` • <span class="text-[#d81b60] font-bold">${member.vulnerability}</span>` : "";
+
+                let displayStatus = member.status || 'Resident';
+                if (isEvac && member.evac_center) {
+                    let shortCenter = member.evac_center.includes("School") ? "School" : "Brgy Hall";
+                    displayStatus = `Evacuated (${shortCenter})`;
+                }
+
+                rosterList.innerHTML += `
+                    <li class="bg-gray-50 p-3 rounded-lg border border-gray-200 flex justify-between items-center shadow-sm">
+                        <div>
+                            <p class="font-bold text-gray-800">${member.full_name}</p>
+                            <p class="text-xs text-gray-500 mt-1">${member.age} yrs${vulnText}</p>
+                        </div>
+                        <span class="px-2.5 py-1 ${badgeColor} border text-[10px] font-black rounded-full uppercase tracking-wider">
+                            ${displayStatus}
+                        </span>
+                    </li>
+                `;
+            });
+
+            loading.classList.add('hidden');
+            content.classList.remove('hidden');
+        } else {
+            loading.innerHTML = `<p class="text-red-500 font-bold text-lg"><i class="fas fa-exclamation-triangle"></i><br>${data.message}</p>`;
+        }
+    } catch (err) {
+        loading.innerHTML = `<p class="text-red-500 font-bold text-lg"><i class="fas fa-wifi"></i><br>Network Error fetching profile.</p>`;
+    }
+}
+
+function initEvacScanner() {
+    if (evacScannerInstance) return;
+    try {
+        evacScannerInstance = new Html5QrcodeScanner("evacReader", { 
+            fps: 30, 
+            rememberLastUsedCamera: true, 
+            qrbox: function(viewfinderWidth, viewfinderHeight) {
+                let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                return { width: Math.floor(minEdgeSize * 0.80), height: Math.floor(minEdgeSize * 0.80) };
+            }
+        }, false);
+        evacScannerInstance.render(onEvacQRSuccess, function(e){});
+    } catch (error) {}
+}
+
+async function onEvacQRSuccess(decodedText, decodedResult) {
+    if (isEvacScanning) return;
+    isEvacScanning = true;
+    const residentId = extractResidentId(decodedText);
+    const center = document.getElementById("checkinCenter").value;
+    const feedback = document.getElementById("checkinFeedback");
+
+    if (!residentId) {
+        feedback.className = "text-center p-3 rounded-lg font-bold text-sm bg-red-900/50 text-red-300 border border-red-500";
+        feedback.innerText = "Invalid QR code: no Household ID found.";
+        feedback.classList.remove("hidden");
+        isEvacScanning = false;
+        return;
+    }
+
+    feedback.className = "text-center p-3 rounded-lg font-bold text-sm bg-yellow-900/50 text-yellow-400 border border-yellow-500";
+    feedback.innerText = `Checking in Household ID: ${residentId}...`;
+    feedback.classList.remove("hidden");
+
+    try {
+        const response = await fetch("/api/scan-evac-qr", {
+            method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ resident_id: residentId, evac_center: center })
+        });
+        const data = await response.json();
+        if (data.status !== "success") throw new Error(data.message || "Check-in failed");
+        
+        feedback.className = "text-center p-3 rounded-lg font-bold text-sm bg-green-900/50 text-green-300 border border-green-500";
+        feedback.innerText = `Arrival Confirmed!`;
+        await showResidentProfileModal(residentId);
+    } catch (error) {
+        feedback.className = "text-center p-3 rounded-lg font-bold text-sm bg-red-900/50 text-red-300 border border-red-500";
+        feedback.innerText = `Check-in Error: ${error.message}`;
+        isEvacScanning = false;
+    }
+
+    setTimeout(() => { feedback.classList.add("hidden"); }, 4000);
+}
+
+window.addEventListener("load", function() {
+    switchTab("register");
+    generateID();
+    addMemberRow();
+});
+</script>
+<style>
+#evacReader { border-radius: 0.5rem; border: none; overflow: hidden; }
+#evacReader__dashboard_section_csr span { color: #94a3b8 !important; }
+#evacReader__dashboard_section_swaplink { color: #22d3ee !important; text-decoration: none; font-weight: bold; }
+#evacReader button { background-color: #0891b2; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+#evacReader select { background-color: #1e293b; color: white; border: 1px solid #475569; border-radius: 4px; padding: 4px; }
+</style>
+{% endblock %}

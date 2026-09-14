@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoñgaTrack - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+        <div class="bg-cyan-600 p-6 text-center">
+            <h1 class="text-3xl font-black text-white tracking-wider">Boñga<span class="text-cyan-200">Track</span></h1>
+            <p class="text-cyan-100 text-sm mt-2">Disaster Management Portal</p>
+        </div>
+        <div class="p-8">
+            <div id="errorMsg" class="hidden mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm font-bold text-center"></div>
+
+            <form id="loginForm" onsubmit="event.preventDefault(); attemptLogin();" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 mb-1">Household ID or Admin Username</label>
+                    <input type="text" id="mobileInput" required class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" placeholder="e.g. BGN-12345 or admin">
+                </div>
+
+                <div class="relative">
+                    <label class="block text-sm font-semibold text-gray-300 mb-1">Security PIN</label>
+                    <input type="password" id="pinInput" required class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition" placeholder="••••">
+                    <button type="button" onclick="togglePin()" class="absolute right-4 top-9 text-gray-400 hover:text-white transition">
+                        <i class="fas fa-eye" id="eyeIcon"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center text-sm text-gray-400 cursor-pointer">
+                        <input type="checkbox" id="remember" class="mr-2 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500">
+                        Remember Me
+                    </label>
+                </div>
+
+                <button type="submit" id="loginBtn" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg flex justify-center items-center">
+                    <span id="btnText">Secure Login</span>
+                    <i class="fas fa-sign-in-alt ml-2"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // STRICT LOGOUT PURGE: If flag is present, completely wipe local storage and stop execution to prevent loops
+            if (urlParams.get('logged_out') === 'true' || urlParams.get('logout') === 'success') {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return; 
+            }
+
+            // Only check auto-restore if we are NOT fresh from a logout
+            const existingToken = localStorage.getItem("bongaAuthToken");
+            const existingUserType = localStorage.getItem("userType");
+            const existingRole = localStorage.getItem("bongaRole");
+            const existingId = localStorage.getItem("residentId");
+
+            if (existingToken === "authenticated") {
+                if (existingUserType === "admin" || existingRole === "admin" || existingId === "admin") {
+                    window.location.replace("/analytics");
+                    return;
+                } else if (existingUserType === "resident" || existingRole === "resident") {
+                    window.location.replace("/resident-portal");
+                    return;
+                }
+            }
+
+            // Pre-fill saved fields if "Remember Me" was checked previously:
+            const savedIdentifier = localStorage.getItem("savedBongaUser");
+            const savedPin = localStorage.getItem("savedBongaPin");
+            if (savedIdentifier && savedPin) {
+                document.getElementById("mobileInput").value = savedIdentifier;
+                document.getElementById("pinInput").value = savedPin;
+                document.getElementById("remember").checked = true;
+            }
+        };
+
+        function togglePin() {
+            const pinInput = document.getElementById('pinInput');
+            const eyeIcon = document.getElementById('eyeIcon');
+            if (pinInput.type === 'password') {
+                pinInput.type = 'text';
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                pinInput.type = 'password';
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        }
+
+        async function attemptLogin() {
+            const mobile = document.getElementById('mobileInput').value.trim();
+            const pin = document.getElementById('pinInput').value.trim();
+            const remember = document.getElementById('remember').checked;
+            const btn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('btnText');
+            const errorMsg = document.getElementById('errorMsg');
+
+            if (!mobile || !pin) return;
+
+            btn.disabled = true;
+            btnText.innerText = "Authenticating...";
+            errorMsg.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier: mobile, pin: pin })
+                });
+
+                const data = await res.json();
+
+                if (data.status === "success") {
+                    localStorage.setItem("bongaAuthToken", "authenticated");
+                    localStorage.setItem("residentId", data.resident_id);
+                    localStorage.setItem("headName", data.head_name);
+                    localStorage.setItem("userType", data.user_type);
+
+                    const isAdmin = (data.user_type && data.user_type.toLowerCase() === "admin") || data.resident_id === "admin" || mobile.toLowerCase() === "admin" || (data.role && data.role.toLowerCase() === "admin");
+
+                    if (isAdmin) {
+                        localStorage.setItem("bongaRole", "admin");
+                    } else {
+                        localStorage.setItem("bongaRole", "resident");
+                    }
+
+                    sessionStorage.setItem("bongaAuthToken", "authenticated");
+                    sessionStorage.setItem("residentId", data.resident_id);
+                    sessionStorage.setItem("headName", data.head_name);
+                    sessionStorage.setItem("userType", data.user_type);
+
+                    if (remember) {
+                        localStorage.setItem("savedBongaUser", mobile);
+                        localStorage.setItem("savedBongaPin", pin);
+                    } else {
+                        localStorage.removeItem("savedBongaUser");
+                        localStorage.removeItem("savedBongaPin");
+                    }
+
+                    if (isAdmin) {
+                        window.location.replace("/analytics");
+                    } else {
+                        window.location.replace("/resident-portal");
+                    }
+                } else {
+                    errorMsg.innerText = data.message || "Invalid credentials.";
+                    errorMsg.classList.remove('hidden');
+                    btn.disabled = false;
+                    btnText.innerText = "Secure Login";
+                }
+            } catch (err) {
+                errorMsg.innerText = "Connection error. Please try again.";
+                errorMsg.classList.add('hidden');
+                btn.disabled = false;
+                btnText.innerText = "Secure Login";
+            }
+        }
+    </script>
+</body>
+</html>

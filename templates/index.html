@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Resident Portal - BoñgaTrack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        glassDark: '#0b0f19',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0b0f19">
+    <style>
+        body { background: radial-gradient(circle at top, #0f172a, #020617); min-height: 100vh; color: #f8fafc; }
+        .glass-card { background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(56, 189, 248, 0.12); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); }
+        .glass-nav { background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border-top: 1px solid rgba(56, 189, 248, 0.12); }
+        .neon-glow { box-shadow: 0 0 25px rgba(56, 189, 248, 0.3); }
+        .neon-glow-emerald { box-shadow: 0 0 25px rgba(16, 185, 129, 0.25); }
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; flex-direction: column; gap: 1rem; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen pb-24 selection:bg-sky-500 selection:text-white">
+
+    <!-- MOBILE APP CONTAINER FRAME -->
+    <main class="w-full max-w-md mx-auto p-4 sm:p-5 flex-grow flex flex-col justify-between">
+
+        <!-- TOP APP BAR -->
+        <header class="flex justify-between items-center py-3 mb-2">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-600 to-blue-500 flex items-center justify-center neon-glow">
+                    <i class="fas fa-shield-alt text-white text-base"></i>
+                </div>
+                <div>
+                    <h1 class="text-xs text-sky-400 font-bold uppercase tracking-wider">Barangay Boñga</h1>
+                    <p class="text-sm font-black text-white" id="headerHeadName">Resident Portal</p>
+                </div>
+            </div>
+            <button onclick="logoutApp()" class="w-9 h-9 rounded-xl glass-card flex items-center justify-center text-gray-400 hover:text-sky-400 hover:border-sky-500/40 transition">
+                <i class="fas fa-power-off text-xs"></i>
+            </button>
+        </header>
+
+        <!-- ================= TAB 1: HOME / DASHBOARD ================= -->
+        <div id="tab-home" class="tab-content active">
+
+            <!-- GPS PERMISSION REQUIRED BANNER -->
+            <div id="gpsBanner" class="glass-card rounded-2xl p-4 border-l-4 border-amber-500 flex items-center justify-between space-x-3 hidden">
+                <div class="flex items-center space-x-2">
+                    <i class="fas fa-location-arrow text-amber-400 animate-pulse"></i>
+                    <p class="text-xs font-bold text-amber-300">Location Access Required</p>
+                </div>
+                <button onclick="requestGPSAccess()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-[10px] uppercase shadow-lg">
+                    Turn On GPS
+                </button>
+            </div>
+
+            <!-- HAZARD NOTICE -->
+            <div class="glass-card rounded-2xl p-4 border-l-4 border-rose-500 flex items-start space-x-3">
+                <i class="fas fa-triangle-exclamation text-rose-400 mt-0.5 text-base"></i>
+                <div>
+                    <p class="text-xs font-bold text-rose-400 uppercase tracking-wide">Mayon Danger Zone Notice</p>
+                    <p class="text-[11px] text-gray-300 mt-0.5 leading-relaxed">Stay alert for real-time advisory updates and evacuation directives from BDRRMC.</p>
+                </div>
+            </div>
+
+            <!-- LIVE ADVISORIES CARD -->
+            <div id="notificationCard" class="glass-card rounded-2xl p-4 space-y-3">
+                <div class="flex justify-between items-center border-b border-white/5 pb-2">
+                    <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center">
+                        <i class="fas fa-bullhorn mr-2"></i> BDRRMC Live Advisories
+                    </span>
+                    <button onclick="clearNotifications()" class="text-[10px] text-gray-400 hover:text-white transition">Clear</button>
+                </div>
+
+                <div id="evacAlertBox" class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 hidden">
+                    <p class="text-[10px] font-bold text-rose-400 uppercase">🚨 Evacuation Advisory</p>
+                    <p class="text-xs text-rose-200 mt-1" id="evacMessageDesc">Loading advisory...</p>
+                </div>
+
+                <div id="reliefAlertBox" class="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 hidden">
+                    <p class="text-[10px] font-bold text-sky-400 uppercase flex items-center gap-1.5"><i class="fas fa-hurricane"></i> Relief Goods Available</p>
+                    <p class="text-xs text-sky-200 mt-1" id="reliefMessageDesc">Checking inventory...</p>
+                </div>
+            </div>
+
+            <!-- WELCOME & HOUSEHOLD ID CARD -->
+            <div class="glass-card rounded-3xl p-5 relative overflow-hidden">
+                <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl"></div>
+                <p class="text-xs text-gray-400 font-bold uppercase tracking-wider">Household Profile</p>
+                <h2 class="text-xl font-black text-white mt-1" id="welcomeName">Loading...</h2>
+                <div class="flex items-center space-x-3 mt-4 pt-3 border-t border-white/5 text-xs font-mono">
+                    <span class="text-sky-400">Household ID: <strong id="residentIdDisplay" class="text-white">--</strong></span>
+                    <span class="text-gray-500">&bull;</span>
+                    <span class="text-cyan-400" id="residentPurokDisplay">Purok --</span>
+                </div>
+            </div>
+
+            <!-- INSTALL PWA CARD -->
+            <div id="installAppCard" class="glass-card rounded-2xl p-4 border border-emerald-500/40 text-center space-y-3 hidden neon-glow-emerald">
+                <div class="flex items-center justify-center space-x-2">
+                    <i class="fas fa-download text-emerald-400"></i>
+                    <p class="text-xs font-bold text-white uppercase tracking-wider">Install BoñgaTrack App</p>
+                </div>
+                <p class="text-[11px] text-gray-300">Add this app to your mobile home screen for fast offline access.</p>
+                <button id="installAppBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-xs text-white transition shadow-lg shadow-emerald-950 flex items-center justify-center space-x-2">
+                    <i class="fas fa-mobile-alt"></i>
+                    <span>Add to Home Screen</span>
+                </button>
+            </div>
+
+            <!-- LIVE GPS TRACKING STATUS -->
+            <div class="glass-card rounded-2xl p-4 text-center space-y-2 cursor-pointer" onclick="requestGPSAccess()" title="Tap to Re-activate GPS">
+                <div class="flex items-center justify-center space-x-2">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-sky-500"></span>
+                    </span>
+                    <p class="text-xs font-bold text-sky-400 uppercase tracking-wider" id="trackingText">Live GPS Active</p>
+                </div>
+                <p class="text-[11px] text-gray-400 font-mono" id="locationStatus">Acquiring satellite lock...</p>
+            </div>
+
+        </div>
+
+        <!-- ================= TAB 2: FAMILY ROSTER ================= -->
+        <div id="tab-family" class="tab-content">
+            <div class="glass-card rounded-3xl p-5 space-y-4">
+                <div class="flex justify-between items-center border-b border-white/5 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wide">Family Roster</h2>
+                        <p class="text-[10px] text-gray-400">Registered household members</p>
+                    </div>
+                    <span class="text-xs bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2.5 py-1 rounded-full font-mono font-bold" id="familyCount">0</span>
+                </div>
+                <div id="familyMemberList" class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+                    <div class="text-center text-gray-500 py-6 text-xs">Loading family roster...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 3: QR CODE ID ================= -->
+        <div id="tab-qr" class="tab-content">
+            <div class="glass-card rounded-3xl p-6 text-center space-y-4 my-auto">
+                <div>
+                    <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider">Offline Verification QR</h2>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Present to checkpoint or relief stations</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl inline-block shadow-2xl cursor-pointer transform hover:scale-105 transition" id="qrContainer" onclick="toggleFullscreenQR()" title="Tap to Enlarge">
+                    <span class="text-gray-500 text-xs">Generating QR...</span>
+                </div>
+                <p class="text-[10px] text-gray-400">Tap QR code to enlarge full-screen.</p>
+            </div>
+        </div>
+
+        <!-- ================= TAB 4: SETTINGS / PROFILE ================= -->
+        <div id="tab-settings" class="tab-content">
+            <div class="glass-card rounded-3xl p-5 space-y-5">
+                <div>
+                    <h2 class="text-sm font-bold text-white uppercase tracking-wider">Account Security</h2>
+                    <p class="text-[10px] text-gray-400">Manage your portal access PIN</p>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-[10px] text-gray-400 uppercase font-mono block mb-1">Current 4-Digit PIN</label>
+                        <input type="password" id="oldPinInput" maxlength="4" placeholder="••••" class="w-full glass-card bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white text-center font-mono tracking-widest outline-none focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-400 uppercase font-mono block mb-1">New 4-Digit PIN</label>
+                        <input type="password" id="newPinInput" maxlength="4" placeholder="••••" class="w-full glass-card bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white text-center font-mono tracking-widest outline-none focus:border-sky-500">
+                    </div>
+                    <button onclick="updatePin()" class="w-full py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
+                        Update Security PIN
+                    </button>
+                    <p id="pinFeedback" class="text-[11px] text-center font-bold hidden"></p>
+                </div>
+
+                <div class="pt-4 border-t border-white/5">
+                    <button onclick="logoutApp()" class="w-full py-3 glass-card hover:bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Go Offline (Log Out)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FULLSCREEN QR MODAL OVERLAY -->
+    <div id="qrFullscreenModal" class="fixed inset-0 bg-black/95 backdrop-blur-2xl z-50 hidden flex flex-col items-center justify-center p-6 cursor-pointer" onclick="toggleFullscreenQR()">
+        <div class="bg-white p-6 rounded-3xl shadow-2xl text-center space-y-3" onclick="event.stopPropagation()">
+            <p class="text-xs font-bold text-gray-800 uppercase tracking-wider">Household QR ID</p>
+            <div id="qrContainerLarge" class="flex justify-center items-center"></div>
+            <p class="text-[10px] text-gray-500">Tap anywhere outside to close</p>
+        </div>
+    </div>
+
+    <!-- BOTTOM FLOATING NAVIGATION BAR (NEON GLASS) -->
+    <nav class="fixed bottom-4 left-4 right-4 max-w-md mx-auto glass-nav rounded-2xl p-2 flex justify-around items-center z-40 shadow-2xl">
+        <button onclick="switchTab('home')" id="nav-btn-home" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-sky-400 transition">
+            <i class="fas fa-home text-base mb-0.5"></i>
+            <span class="text-[9px] font-bold uppercase tracking-wider">Home</span>
+        </button>
+        <button onclick="switchTab('family')" id="nav-btn-family" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-gray-400 hover:text-white transition">
+            <i class="fas fa-users text-base mb-0.5"></i>
+            <span class="text-[9px] font-bold uppercase tracking-wider">Family</span>
+        </button>
+        <button onclick="switchTab('qr')" id="nav-btn-qr" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-gray-400 hover:text-white transition">
+            <i class="fas fa-qrcode text-base mb-0.5"></i>
+            <span class="text-[9px] font-bold uppercase tracking-wider">QR ID</span>
+        </button>
+        <button onclick="switchTab('settings')" id="nav-btn-settings" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-gray-400 hover:text-white transition">
+            <i class="fas fa-gear text-base mb-0.5"></i>
+            <span class="text-[9px] font-bold uppercase tracking-wider">Settings</span>
+        </button>
+    </nav>
+
+    <!-- QR CODE GENERATOR CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- FRONTEND APP LOGIC -->
+    <script>
+        let residentId = null;
+        let trackingStarted = false;
+        let trackingWatchId = null;
+        let lastUpdateTime = 0;
+        let deferredPrompt = null;
+        let lastEvacMessage = "";
+        let lastReliefMessage = "";
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installCard = document.getElementById('installAppCard');
+            if (installCard) installCard.classList.remove('hidden');
+        });
+
+        document.getElementById('installAppBtn')?.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                let { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    document.getElementById('installAppCard').classList.add('hidden');
+                }
+                deferredPrompt = null;
+            }
+        });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('nav button').forEach(el => {
+                el.classList.remove('text-sky-400');
+                el.classList.add('text-gray-400');
+            });
+
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            const activeBtn = document.getElementById(`nav-btn-${tabName}`);
+            activeBtn.classList.remove('text-gray-400');
+            activeBtn.classList.add('text-sky-400');
+        }
+
+        function getResidentId() {
+            return localStorage.getItem("resident_id") || localStorage.getItem("residentId") || sessionStorage.getItem("resident_id") || sessionStorage.getItem("residentId") || null;
+        }
+
+        function saveResidentId(id) {
+            if (!id) return;
+            localStorage.setItem("resident_id", id);
+            localStorage.setItem("residentId", id);
+            sessionStorage.setItem("resident_id", id);
+            sessionStorage.setItem("residentId", id);
+        }
+
+        function clearResidentId() {
+            localStorage.clear();
+            sessionStorage.clear();
+        }
+
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted || (performance.navigation && performance.navigation.type === 2)) {
+                const currentToken = getResidentId();
+                const currentRole = localStorage.getItem("bongaRole");
+                if (!currentToken || currentRole === "admin" || currentToken === "admin") {
+                    window.location.replace("/login?logged_out=true");
+                } else {
+                    loadResidentProfile(currentToken);
+                }
+            }
+        });
+
+        window.addEventListener("DOMContentLoaded", () => {
+            residentId = getResidentId();
+            const currentRole = localStorage.getItem("bongaRole");
+
+            if (!residentId) {
+                window.location.replace("/login?logged_out=true");
+                return;
+            }
+            saveResidentId(residentId);
+
+            if (residentId && residentId !== "null") {
+                localStorage.setItem("bongaAuthToken", "authenticated");
+                localStorage.setItem("residentId", residentId);
+                localStorage.setItem("bongaRole", "resident");
+            }
+
+            document.getElementById("residentIdDisplay").innerText = residentId;
+            loadResidentProfile(residentId);
+            loadNotifications();
+            initPersistentTracking();
+        });
+
+        function initPersistentTracking() {
+            if (!navigator.geolocation) {
+                document.getElementById('locationStatus').innerText = "GPS Not Supported";
+                return;
+            }
+
+            requestGPSAccess();
+
+            if (!trackingStarted) {
+                trackingStarted = true;
+                trackingWatchId = navigator.geolocation.watchPosition(
+                    (pos) => handleGPSPosition(pos),
+                    (err) => handleGPSError(err),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            }
+        }
+
+        function requestGPSAccess() {
+            document.getElementById('locationStatus').innerText = "Requesting GPS access...";
+            navigator.geolocation.getCurrentPosition(
+                (pos) => handleGPSPosition(pos),
+                (err) => handleGPSError(err),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function handleGPSPosition(pos) {
+            const { latitude, longitude, accuracy } = pos.coords;
+            document.getElementById('locationStatus').innerText = `GPS Active • Accuracy: ±${Math.round(accuracy)}m`;
+            document.getElementById('gpsBanner').classList.add('hidden');
+
+            sendLocationUpdate(residentId, latitude, longitude, accuracy);
+
+            const now = Date.now();
+            if (now - lastUpdateTime >= 15000) {
+                lastUpdateTime = now;
+            }
+        }
+
+        function handleGPSError(err) {
+            document.getElementById('gpsBanner').classList.remove('hidden');
+            if (err.code === err.PERMISSION_DENIED) {
+                document.getElementById('locationStatus').innerText = "GPS Permission Blocked. Enable in browser.";
+            } else {
+                document.getElementById('locationStatus').innerText = "GPS Turned Off. Tap 'Turn On GPS'.";
+            }
+        }
+
+        async function checkAndRequestCamera(id) {
+            try {
+                let res = await fetch(`/api/resident/${encodeURIComponent(id)}`, { cache: "no-store" });
+                let data = await res.json();
+                if (data.status === "success" && data.resident) {
+                    const role = (data.resident.role || "").toLowerCase();
+                    if (role === 'admin' || role === 'official' || role === 'staff') {
+                        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                            let stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        async function sendLocationUpdate(id, latitude, longitude, accuracy) {
+            try {
+                await fetch("/api/update_location", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ resident_id: id, lat: latitude, lon: longitude, accuracy: accuracy })
+                });
+            } catch (e) {}
+        }
+
+        async function loadNotifications() {
+            try {
+                let res = await fetch("/api/get_notifications", { cache: "no-store" });
+                let data = await res.json();
+                if (!data.success) return;
+
+                const notificationCard = document.getElementById("notificationCard");
+                let hasActiveAlerts = false;
+
+                const evacBox = document.getElementById("evacAlertBox");
+                if (data.evac_active && data.evac_message) {
+                    evacBox.classList.remove("hidden");
+                    document.getElementById("evacMessageDesc").innerText = data.evac_message;
+                    hasActiveAlerts = true;
+
+                    if (data.evac_message !== lastEvacMessage) {
+                        lastEvacMessage = data.evac_message;
+                        sessionStorage.removeItem("notificationsCleared");
+                    }
+                } else {
+                    evacBox.classList.add("hidden");
+                }
+
+                const reliefBox = document.getElementById("reliefAlertBox");
+                if (data.relief_active && data.relief_message) {
+                    reliefBox.classList.remove("hidden");
+                    document.getElementById("reliefMessageDesc").innerText = `${data.relief_message} @ ${data.relief_location || "Designated Center"}`;
+                    hasActiveAlerts = true;
+
+                    if (data.relief_message !== lastReliefMessage) {
+                        lastReliefMessage = data.relief_message;
+                        sessionStorage.removeItem("notificationsCleared");
+                    }
+                } else {
+                    reliefBox.classList.add("hidden");
+                }
+
+                if (sessionStorage.getItem("notificationsCleared") === "true") {
+                    notificationCard.style.display = "none";
+                } else if (hasActiveAlerts) {
+                    notificationCard.style.display = "block";
+                } else {
+                    notificationCard.style.display = "none";
+                }
+            } catch (e) {}
+        }
+
+        function clearNotifications() {
+            document.getElementById("notificationCard").style.display = "none";
+            sessionStorage.setItem("notificationsCleared", "true");
+        }
+
+        async function updatePin() {
+            let oldPin = document.getElementById('oldPinInput').value.trim();
+            let newPin = document.getElementById('newPinInput').value.trim();
+            let feedback = document.getElementById('pinFeedback');
+
+            if (!/^\d{4}$/.test(oldPin) || !/^\d{4}$/.test(newPin)) {
+                feedback.innerText = "PINs must be exactly 4 digits.";
+                feedback.className = "text-[11px] text-center font-bold text-rose-400";
+                feedback.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                let res = await fetch("/api/change-pin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ resident_id: residentId, old_pin: oldPin, new_pin: newPin })
+                });
+                let data = await res.json();
+                if (res.ok && data.status === "success") {
+                    feedback.innerText = "Security PIN updated successfully!";
+                    feedback.className = "text-[11px] text-center font-bold text-emerald-400";
+                    document.getElementById('oldPinInput').value = "";
+                    document.getElementById('newPinInput').value = "";
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                feedback.innerText = "Failed to update PIN. Check current PIN.";
+                feedback.className = "text-[11px] text-center font-bold text-rose-400";
+            }
+            feedback.classList.remove('hidden');
+        }
+
+        function logoutApp() {
+            localStorage.clear();
+            sessionStorage.clear();
+
+            if (trackingWatchId !== null && navigator.geolocation) {
+                navigator.geolocation.clearWatch(trackingWatchId);
+            }
+
+            fetch("/api/logout", { method: "POST" }).catch(() => {});
+
+            window.location.replace("/login?logged_out=true");
+        }
+
+        function toggleFullscreenQR() {
+            const modal = document.getElementById("qrFullscreenModal");
+            modal.classList.toggle("hidden");
+        }
+
+        function renderResidentProfile(resident) {
+            const headName = resident.head_name || "Resident";
+            document.getElementById("welcomeName").innerText = `Welcome, ${headName}`;
+            document.getElementById("headerHeadName").innerText = headName;
+            document.getElementById("residentIdDisplay").innerText = resident.id || residentId || "";
+            document.getElementById("residentPurokDisplay").innerText = `Purok ${resident.purok || "---"}`;
+
+            const members = Array.isArray(resident.members) ? resident.members : [];
+            document.getElementById("familyCount").innerText = resident.family_size ?? members.length;
+
+            const qrContainer = document.getElementById("qrContainer");
+            const qrContainerLarge = document.getElementById("qrContainerLarge");
+            qrContainer.innerHTML = "";
+            qrContainerLarge.innerHTML = "";
+
+            if (typeof QRCode !== "undefined") {
+                const qrText = JSON.stringify({ id: resident.id || residentId, head: headName });
+                new QRCode(qrContainer, { text: qrText, width: 150, height: 150, colorDark: "#0b0f19", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+                new QRCode(qrContainerLarge, { text: qrText, width: 220, height: 220, colorDark: "#0b0f19", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+            }
+            renderFamilyRoster(members);
+
+            checkAndRequestCamera(resident.id || residentId);
+        }
+
+        async function loadResidentProfile(id) {
+            try {
+                let res = await fetch(`/api/resident/${encodeURIComponent(id)}`, { cache: "no-store" });
+                let data = await res.json();
+                if (!res.ok) {
+                    if (res.status === 401 || res.status === 403 || res.status === 404) {
+                        clearResidentId();
+                        window.location.replace("/login?logged_out=true");
+                        return;
+                    }
+                    throw new Error(data.message);
+                }
+                renderResidentProfile(data.resident);
+            } catch (e) {}
+        }
+
+        function renderFamilyRoster(members) {
+            const container = document.getElementById("familyMemberList");
+            container.innerHTML = "";
+            if (!members.length) {
+                container.innerHTML = `<div class="text-center text-gray-500 py-6 text-xs">No family members registered.</div>`;
+                return;
+            }
+            members.forEach(m => {
+                let badgeClass = "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+                let status = m.status || "At Home";
+                if (status.toLowerCase() === "evacuated") badgeClass = "bg-cyan-500/20 text-cyan-300 border-cyan-500/30";
+                if (status.toLowerCase() === "missing") badgeClass = "bg-rose-500/20 text-rose-300 border-rose-500/30";
+
+                let details = `${m.age ?? "--"} yrs old`;
+                if (m.vulnerability && m.vulnerability !== "None") details += ` • ${m.vulnerability}`;
+
+                container.innerHTML += `
+                    <div class="glass-card bg-slate-900/40 rounded-2xl p-3 flex justify-between items-center border border-white/5">
+                        <div>
+                            <p class="font-bold text-white text-xs">${escapeHtml(m.full_name || m.name)}</p>
+                            <p class="text-[10px] text-gray-400 font-mono mt-0.5">${escapeHtml(details)}</p>
+                        </div>
+                        <span class="text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase border ${badgeClass}">${escapeHtml(status)}</span>
+                    </div>
+                `;
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        setInterval(loadNotifications, 3000);
+    </script>
+</body>
+</html>

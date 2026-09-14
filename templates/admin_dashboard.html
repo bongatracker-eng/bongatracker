@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Command Center - BoñgaTrack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Leaflet CSS for OpenStreetMap GPS Tracking -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .map-container { height: 480px; width: 100%; border-radius: 0.75rem; z-index: 10; }
+        /* Custom Dark Tile Filter for OpenStreetMap */
+        .leaflet-layer, .leaflet-control-zoom-in, .leaflet-control-zoom-out, .leaflet-control-attribution {
+            filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <nav class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <h1 class="text-2xl font-black text-white tracking-wider">Boñga<span class="text-cyan-400">Track</span></h1>
+            <span class="bg-slate-700 text-cyan-300 text-xs px-2.5 py-1 rounded-full font-semibold border border-slate-600">BRGY. 53, LEGAZPI CITY</span>
+        </div>
+        <div class="hidden md:flex items-center space-x-6 text-sm font-semibold">
+            <a href="/" class="text-cyan-400 flex items-center"><i class="fas fa-chart-line mr-2"></i>DASHBOARD</a>
+            <a href="/registration" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-user-plus mr-2"></i>REGISTRATION</a>
+            <a href="/inventory" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-boxes mr-2"></i>INVENTORY</a>
+            <a href="/analytics" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-chart-pie mr-2"></i>ANALYTICS</a>
+            <a href="/sms" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-sms mr-2"></i>SMS ALERTS</a>
+        </div>
+        <div>
+            <button onclick="handleLogout()" class="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-4 py-2 rounded-xl text-sm font-bold transition flex items-center">
+                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+        <!-- Header Title & Export Report -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h2 class="text-3xl font-black text-white">Command Center</h2>
+                <p class="text-slate-400 text-sm mt-1">Live Evacuation, Relief, & Roster Management</p>
+            </div>
+            <a href="/api/reports/excel" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-xl transition shadow-lg flex items-center text-sm">
+                <i class="fas fa-download mr-2"></i>Download CDRRMO Report (CSV)
+            </a>
+        </div>
+
+        <!-- Critical Hazard Banner -->
+        <div class="bg-red-950/60 border border-red-500/80 p-4 rounded-xl flex items-center space-x-4 shadow-lg">
+            <span class="bg-red-600 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-lg tracking-wider animate-pulse whitespace-nowrap">CRITICAL HAZARD ZONE</span>
+            <p class="text-red-200 text-sm">Brgy. Boñga (Urban Coastal) is situated within the 8-kilometer Extended Danger Zone of Mayon Volcano. Immediate readiness protocols active.</p>
+        </div>
+
+        <!-- Top Metric Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg border-l-4 border-l-cyan-500">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Evacuated Safe</p>
+                <h3 id="statEvacuated" class="text-4xl font-black text-white mt-2">0</h3>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg border-l-4 border-l-emerald-500">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tracked at Home</p>
+                <h3 id="statAtHome" class="text-4xl font-black text-white mt-2">0</h3>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg border-l-4 border-l-amber-500">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vulnerable Sector Priority</p>
+                <h3 id="statVulnerable" class="text-4xl font-black text-white mt-2">0</h3>
+            </div>
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg border-l-4 border-l-purple-500">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Relief Claims Logged</p>
+                <h3 id="statRelief" class="text-4xl font-black text-white mt-2">0</h3>
+            </div>
+        </div>
+
+        <!-- Main Workspace: Left (Map & Windy) & Right (Broadcast Settings + Evac Center Occupancy) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Side: Live BDRRMC Emergency Radar & Windy Weather Widget -->
+            <div class="lg:col-span-2 bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex flex-col space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white flex items-center">
+                        <i class="fas fa-radar text-cyan-400 mr-2"></i>Live BDRRMC Emergency Radar
+                    </h3>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="autoZoomToMarkers()" class="bg-cyan-600/30 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/50 text-xs px-3 py-1 rounded-lg font-bold transition flex items-center">
+                            <i class="fas fa-crosshairs mr-1.5"></i>Auto-Zoom Focus
+                        </button>
+                        <span class="bg-emerald-900/50 border border-emerald-500 text-emerald-300 text-xs px-3 py-1 rounded-full font-bold flex items-center">
+                            <span class="w-2 h-2 bg-emerald-400 rounded-full animate-ping mr-1.5"></span> Live Tracking Active
+                        </span>
+                    </div>
+                </div>
+                <div id="map" class="map-container"></div>
+
+                <!-- Windy Weather Integration Widget -->
+                <div class="border-t border-slate-700 pt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-sm font-bold text-white flex items-center"><i class="fas fa-cloud-sun-rain text-amber-400 mr-2"></i>Windy Live Weather & Typhoon Radar</h4>
+                        <span class="text-xs text-slate-400">Legazpi Regional View</span>
+                    </div>
+                    <div class="w-full h-[300px] rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
+                        <iframe width="100%" height="100%" src="https://embed.windy.com/embed2.html?lat=13.139&lon=123.744&zoom=11&level=surface&overlay=wind&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1" frameborder="0"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: System Broadcast Settings & Evac Center Occupancy Stacked -->
+            <div class="space-y-6 flex flex-col">
+                
+                <!-- System Broadcast Settings Box -->
+                <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex flex-col justify-between space-y-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center mb-1">
+                            <i class="fas fa-broadcast-tower text-cyan-400 mr-2"></i>System Broadcast Settings
+                        </h3>
+                        <p class="text-xs text-slate-400 mb-4">Draft notices freely. Alerts only dispatch when clicking the trigger button below.</p>
+
+                        <!-- Evac Advisory Control -->
+                        <div class="space-y-3 mb-5">
+                            <label class="flex items-center text-sm font-bold text-slate-200 cursor-pointer">
+                                <input type="checkbox" id="evacActiveToggle" class="mr-3 w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500">
+                                Evac Advisory Active
+                            </label>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button onclick="setEvacTemplate('Mandatory Evac')" class="bg-slate-700 hover:bg-slate-600 text-xs text-cyan-300 px-2.5 py-1 rounded border border-slate-600 transition">Mandatory Evac</button>
+                                <button onclick="setEvacTemplate('Weather Warning')" class="bg-slate-700 hover:bg-slate-600 text-xs text-cyan-300 px-2.5 py-1 rounded border border-slate-600 transition">Weather Warning</button>
+                                <button onclick="setEvacTemplate('Standby Notice')" class="bg-slate-700 hover:bg-slate-600 text-xs text-cyan-300 px-2.5 py-1 rounded border border-slate-600 transition">Standby Notice</button>
+                            </div>
+                            <textarea id="evacMessageInput" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Type Evac advisory message..."></textarea>
+                        </div>
+
+                        <!-- Relief Distribution Control -->
+                        <div class="space-y-3 border-t border-slate-700 pt-4 mb-5">
+                            <label class="flex items-center text-sm font-bold text-slate-200 cursor-pointer">
+                                <input type="checkbox" id="reliefActiveToggle" class="mr-3 w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500">
+                                Relief Distribution Active
+                            </label>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button onclick="setReliefPreset('Covered Court')" class="bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/50 text-xs px-2.5 py-1 rounded transition font-semibold">Relief Ready: Court</button>
+                                <button onclick="setReliefPreset('Barangay Hall')" class="bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/50 text-xs px-2.5 py-1 rounded transition font-semibold">Relief Ready: Hall</button>
+                                <button onclick="setReliefPreset('Elementary School')" class="bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/50 text-xs px-2.5 py-1 rounded transition font-semibold">Relief Ready: School</button>
+                            </div>
+                            <textarea id="reliefLocationInput" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Type relief message e.g. Family food packs are now ready at..."></textarea>
+                        </div>
+
+                        <!-- Instant Push Trigger Button (The ONLY way it sends) -->
+                        <div class="border-t border-slate-700 pt-4">
+                            <button onclick="triggerInstantPushAlert()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg flex items-center justify-center text-sm">
+                                <i class="fas fa-paper-plane mr-2"></i>Trigger Instant Push Broadcast
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="broadcastStatus" class="text-center text-xs font-semibold text-emerald-400 hidden mt-2">
+                        <i class="fas fa-check-circle mr-1"></i> Broadcast settings successfully dispatched!
+                    </div>
+                </div>
+
+                <!-- Evacuation Center Occupancy & Return Management (Bubble Layout) -->
+                <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg">
+                    <h3 class="text-base font-bold text-white mb-1 flex items-center">
+                        <i class="fas fa-house-chimney-user text-cyan-400 mr-2"></i> Evacuation Return Management
+                    </h3>
+                    <p class="text-xs text-slate-400 mb-4">Click <strong>"Return"</strong> on resident bubbles to check them out back home.</p>
+
+                    <div class="space-y-4">
+                        <!-- Boñga Elementary School Occupants -->
+                        <div class="bg-slate-900/60 border border-slate-700 p-3 rounded-xl">
+                            <h4 class="font-bold text-white text-xs mb-2 flex items-center justify-between">
+                                <span class="flex items-center"><i class="fas fa-school text-cyan-400 mr-1.5"></i>Boñga Elem. School</span>
+                                <span id="schoolBadge" class="bg-cyan-900/60 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full border border-cyan-700">0 Occupants</span>
+                            </h4>
+                            <div id="schoolOccupants" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
+                                <p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>
+                            </div>
+                        </div>
+
+                        <!-- Boñga Barangay Hall Occupants -->
+                        <div class="bg-slate-900/60 border border-slate-700 p-3 rounded-xl">
+                            <h4 class="font-bold text-white text-xs mb-2 flex items-center justify-between">
+                                <span class="flex items-center"><i class="fas fa-building text-cyan-400 mr-1.5"></i>Boñga Barangay Hall</span>
+                                <span id="hallBadge" class="bg-cyan-900/60 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full border border-cyan-700">0 Occupants</span>
+                            </h4>
+                            <div id="hallOccupants" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
+                                <p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let markersLayer = L.layerGroup();
+        let allMarkerCoords = [];
+        let hasAutoZoomed = false;
+
+        window.onload = function() {
+            initMap();
+            loadDashboardData();
+            loadNotifications(); // Loads current server settings into admin inputs on start
+            setInterval(loadDashboardData, 10000);
+        };
+
+        function initMap() {
+            map = L.map('map').setView([13.1391, 123.7438], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            markersLayer.addTo(map);
+        }
+
+        async function loadDashboardData() {
+            try {
+                const resAna = await fetch('/api/dashboard-analytics');
+                const dataAna = await resAna.json();
+                document.getElementById('statEvacuated').innerText = dataAna.evacuated;
+                document.getElementById('statAtHome').innerText = dataAna.at_home;
+                document.getElementById('statVulnerable').innerText = dataAna.vulnerable;
+
+                const resInv = await fetch('/api/inventory/data');
+                const dataInv = await resInv.json();
+                document.getElementById('statRelief').innerText = dataInv.distributed || 0;
+
+                const resLoc = await fetch('/api/live_locations');
+                const locs = await resLoc.json();
+                markersLayer.clearLayers();
+                allMarkerCoords = [];
+
+                locs.forEach(loc => {
+                    if(loc.lat && loc.lon) {
+                        allMarkerCoords.push([loc.lat, loc.lon]);
+                        L.marker([loc.lat, loc.lon])
+                            .bindPopup(`<b>${loc.name}</b><br>ID: ${loc.resident_id}`)
+                            .addTo(markersLayer);
+                    }
+                });
+
+                if (!hasAutoZoomed && allMarkerCoords.length > 0) {
+                    autoZoomToMarkers();
+                    hasAutoZoomed = true;
+                }
+
+                const resRes = await fetch('/api/search-resident?q=');
+                const residents = await resRes.json();
+                renderEvacBubbles(residents);
+
+            } catch (err) {
+                console.error("Dashboard sync error:", err);
+            }
+        }
+
+        function autoZoomToMarkers() {
+            if (allMarkerCoords.length > 0) {
+                const bounds = L.latLngBounds(allMarkerCoords);
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+            } else {
+                map.setView([13.1391, 123.7438], 14);
+            }
+        }
+
+        function renderEvacBubbles(residents) {
+            let schoolHTML = "";
+            let hallHTML = "";
+            let schoolCount = 0;
+            let hallCount = 0;
+
+            residents.forEach(res => {
+                if (res.members) {
+                    res.members.forEach(m => {
+                        if (m.status === 'Evacuated') {
+                            const bubble = `
+                                <div class="bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg flex items-center space-x-1.5 shadow">
+                                    <span class="text-[11px] font-semibold text-white">${m.full_name}</span>
+                                    <button onclick="checkoutMember(${m.id})" class="bg-red-500/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 text-[10px] px-1.5 py-0.5 rounded font-bold transition" title="Return Home">
+                                        <i class="fas fa-home"></i> Return
+                                    </button>
+                                </div>
+                            `;
+                            if (m.evac_center && m.evac_center.toLowerCase().includes('school')) {
+                                schoolHTML += bubble;
+                                schoolCount++;
+                            } else {
+                                hallHTML += bubble;
+                                hallCount++;
+                            }
+                        }
+                    });
+                }
+            });
+
+            document.getElementById('schoolOccupants').innerHTML = schoolHTML || '<p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>';
+            document.getElementById('hallOccupants').innerHTML = hallHTML || '<p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>';
+            
+            document.getElementById('schoolBadge').innerText = `${schoolCount} Occupants`;
+            document.getElementById('hallBadge').innerText = `${hallCount} Occupants`;
+        }
+
+        async function checkoutMember(memberId) {
+            if(!confirm("Are you sure this person is returning home?")) return;
+            try {
+                const res = await fetch(`/api/member/${memberId}/checkout`, { method: 'POST' });
+                const data = await res.json();
+                if(data.status === 'success') {
+                    loadDashboardData();
+                } else {
+                    alert(data.message || "Failed to check out.");
+                }
+            } catch(e) {
+                alert("Connection error.");
+            }
+        }
+
+        async function loadNotifications() {
+            try {
+                const res = await fetch('/api/get_notifications');
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('evacActiveToggle').checked = data.evac_active;
+                    document.getElementById('evacMessageInput').value = data.evac_message || '';
+                    document.getElementById('reliefActiveToggle').checked = data.relief_active;
+                    document.getElementById('reliefLocationInput').value = data.relief_location || '';
+                }
+            } catch(e) {}
+        }
+
+        // Now decoupled: editing inputs does NOT sync to server automatically.
+        // It only sends to the database when the admin explicitly presses the broadcast button.
+        async function triggerInstantPushAlert() {
+            const evac_active = document.getElementById('evacActiveToggle').checked;
+            const evac_message = document.getElementById('evacMessageInput').value;
+            const relief_active = document.getElementById('reliefActiveToggle').checked;
+            const relief_location = document.getElementById('reliefLocationInput').value;
+
+            try {
+                const response = await fetch('/api/admin/notifications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ evac_active, evac_message, relief_active, relief_location })
+                });
+                const result = await response.json();
+                
+                if(result.success || response.ok) {
+                    const statusDiv = document.getElementById('broadcastStatus');
+                    statusDiv.classList.remove('hidden');
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                    alert("Instant push broadcast successfully sent and synchronized to all resident devices!");
+                } else {
+                    alert("Failed to send broadcast.");
+                }
+            } catch(e) {
+                alert("Connection error while dispatching broadcast.");
+            }
+        }
+
+        function setEvacTemplate(type) {
+            const input = document.getElementById('evacMessageInput');
+            if(type === 'Mandatory Evac') {
+                input.value = "MANDATORY EVACUATION: Immediate threat detected. Proceed to your designated evacuation center immediately.";
+            } else if(type === 'Weather Warning') {
+                input.value = "WEATHER WARNING: Severe weather conditions reported. Secure your homes and stay tuned.";
+            } else if(type === 'Standby Notice') {
+                input.value = "STANDBY ADVISORY: Monitor local weather updates closely. Prepare emergency go-bags.";
+            }
+            document.getElementById('evacActiveToggle').checked = true;
+        }
+
+        function setReliefPreset(locationName) {
+            document.getElementById('reliefLocationInput').value = `RELIEF DISTRIBUTION READY: Family food packs are now ready for claiming at the ${locationName}. Bring your QR ID cards.`;
+            document.getElementById('reliefActiveToggle').checked = true;
+        }
+
+        async function handleLogout() {
+            await fetch('/api/logout', { method: 'POST' });
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.replace('/login?logged_out=true');
+        }
+    </script>
+</body>
+</html>
