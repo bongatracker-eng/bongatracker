@@ -45,26 +45,44 @@
 
             <!-- DESKTOP NAVIGATION LINKS -->
             <nav class="hidden md:flex items-center space-x-1 lg:space-x-2 text-xs font-bold uppercase tracking-wider">
-                <a href="/" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
-                    <i class="fas fa-chart-line text-cyan-400"></i><span>Dashboard</span>
-                </a>
-                <a href="/registration" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
-                    <i class="fas fa-users text-indigo-400"></i><span>Registration</span>
-                </a>
-                <a href="/inventory" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
-                    <i class="fas fa-boxes text-amber-400"></i><span>Inventory</span>
-                </a>
-                <a href="/analytics" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
-                    <i class="fas fa-chart-pie text-purple-400"></i><span>Analytics</span>
-                </a>
-                <a href="/sms" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
-                    <i class="fas fa-sms text-emerald-400"></i><span>SMS Alerts</span>
-                </a>
+                {% if is_admin %}
+                    <a href="/" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-chart-line text-cyan-400"></i><span>Dashboard</span>
+                    </a>
+                    <a href="/registration" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-users text-indigo-400"></i><span>Registration</span>
+                    </a>
+                    <a href="/hazard-map" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-map-location-dot text-rose-400"></i><span>Evacuation Map</span>
+                    </a>
+                    <a href="/admin/volunteers" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-hands-helping text-orange-400"></i><span>Volunteers</span>
+                    </a>
+                    <a href="/inventory" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-boxes text-amber-400"></i><span>Inventory</span>
+                    </a>
+                    <a href="/analytics" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-chart-pie text-purple-400"></i><span>Analytics</span>
+                    </a>
+                    <a href="/sms" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-sms text-emerald-400"></i><span>SMS Alerts</span>
+                    </a>
+                {% elif is_volunteer %}
+                    <a href="/volunteer" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-house text-cyan-400"></i><span>Home</span>
+                    </a>
+                    <a href="/inventory" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-boxes text-amber-400"></i><span>Inventory</span>
+                    </a>
+                    <a href="/registration" class="px-3 py-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-1.5">
+                        <i class="fas fa-users text-indigo-400"></i><span>Registration</span>
+                    </a>
+                {% endif %}
             </nav>
 
             <!-- RIGHT ACTIONS & MOBILE HAMBURGER BUTTON -->
             <div class="flex items-center space-x-3">
-                <button onclick="logoutSession()" class="bg-red-950/60 hover:bg-red-900/80 border border-red-800/60 text-red-300 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md">
+                <button onclick="confirmLogout(logoutSession)" class="bg-red-950/60 hover:bg-red-900/80 border border-red-800/60 text-red-300 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md">
                     <i class="fas fa-sign-out-alt"></i><span>Logout</span>
                 </button>
 
@@ -91,21 +109,39 @@
         </div>
 
         <nav class="flex flex-col space-y-2 text-sm font-bold uppercase tracking-wider">
-            <a href="/" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
-                <i class="fas fa-chart-line text-cyan-400 w-5"></i><span>Dashboard</span>
-            </a>
-            <a href="/registration" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
-                <i class="fas fa-users text-indigo-400 w-5"></i><span>Registration</span>
-            </a>
-            <a href="/inventory" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
-                <i class="fas fa-boxes text-amber-400 w-5"></i><span>Inventory</span>
-            </a>
-            <a href="/analytics" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
-                <i class="fas fa-chart-pie text-purple-400 w-5"></i><span>Analytics</span>
-            </a>
-            <a href="/sms" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
-                <i class="fas fa-sms text-emerald-400 w-5"></i><span>SMS Alerts</span>
-            </a>
+            {% if is_admin %}
+                <a href="/" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-chart-line text-cyan-400 w-5"></i><span>Dashboard</span>
+                </a>
+                <a href="/registration" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-users text-indigo-400 w-5"></i><span>Registration</span>
+                </a>
+                <a href="/hazard-map" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-map-location-dot text-rose-400 w-5"></i><span>Evacuation Map</span>
+                </a>
+                <a href="/admin/volunteers" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-hands-helping text-orange-400 w-5"></i><span>Volunteers</span>
+                </a>
+                <a href="/inventory" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-boxes text-amber-400 w-5"></i><span>Inventory</span>
+                </a>
+                <a href="/analytics" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-chart-pie text-purple-400 w-5"></i><span>Analytics</span>
+                </a>
+                <a href="/sms" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-sms text-emerald-400 w-5"></i><span>SMS Alerts</span>
+                </a>
+            {% elif is_volunteer %}
+                <a href="/volunteer" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-house text-cyan-400 w-5"></i><span>Home</span>
+                </a>
+                <a href="/inventory" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-boxes text-amber-400 w-5"></i><span>Inventory</span>
+                </a>
+                <a href="/registration" class="px-4 py-3 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition flex items-center space-x-3">
+                    <i class="fas fa-users text-indigo-400 w-5"></i><span>Registration</span>
+                </a>
+            {% endif %}
         </nav>
 
         <div class="mt-auto pt-6 border-t border-slate-800 text-center">
@@ -120,6 +156,32 @@
     <footer class="bg-slate-900 border-t border-slate-800 text-gray-500 text-xs py-4 text-center mt-auto">
         <p>&copy; 2026 BoñgaTrack Disaster Management System &bull; Brgy. 53, Legazpi City</p>
     </footer>
+
+    <!-- ===== SHARED LOGOUT CONFIRMATION MODAL ===== -->
+    <div id="logoutModal" style="display:none"
+         class="fixed inset-0 z-[60] items-center justify-center bg-slate-950/70 backdrop-blur-sm px-4">
+        <div class="w-full max-w-sm bg-slate-900 border border-slate-700/60 rounded-2xl p-6 shadow-2xl">
+            <div class="flex items-start space-x-3">
+                <div class="w-11 h-11 rounded-2xl bg-red-600/20 border border-red-500/40 flex items-center justify-center shrink-0">
+                    <i class="fas fa-sign-out-alt text-red-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">Log out of BoñgaTrack?</h3>
+                    <p id="logoutModalText" class="text-xs text-gray-400 mt-1">You will need to sign in again to continue.</p>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button type="button" id="logoutCancelBtn"
+                        class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-gray-300 font-bold text-sm transition">
+                    Cancel
+                </button>
+                <button type="button" id="logoutOkBtn"
+                        class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition shadow-lg">
+                    Yes, log out
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- GLOBAL SCRIPTS -->
     <script>
@@ -146,6 +208,43 @@
                 window.location.href = '/login';
             }
         }
+
+        // ---- Logout confirmation modal (covers admin, volunteer & resident) ----
+        let logoutAction = null;
+
+        function confirmLogout(fn, message) {
+            const modal = document.getElementById('logoutModal');
+            if (!modal) { if (typeof fn === 'function') fn(); return; }   // failsafe: log out if modal missing
+            logoutAction = fn;
+            document.getElementById('logoutModalText').innerText =
+                message || 'You will need to sign in again to continue.';
+            modal.style.display = 'flex';   // inline style avoids the Tailwind hidden/flex clash
+            document.getElementById('logoutOkBtn').focus();
+        }
+
+        function closeLogoutModal() {
+            const modal = document.getElementById('logoutModal');
+            if (modal) modal.style.display = 'none';
+            logoutAction = null;
+        }
+
+        (function initLogoutModal() {
+            const modal  = document.getElementById('logoutModal');
+            const ok     = document.getElementById('logoutOkBtn');
+            const cancel = document.getElementById('logoutCancelBtn');
+            if (!modal || !ok || !cancel) return;
+
+            cancel.addEventListener('click', closeLogoutModal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeLogoutModal(); });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.style.display === 'flex') closeLogoutModal();
+            });
+            ok.addEventListener('click', () => {
+                const fn = logoutAction;   // capture before the close resets it
+                closeLogoutModal();
+                if (typeof fn === 'function') fn();
+            });
+        })();
 
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {

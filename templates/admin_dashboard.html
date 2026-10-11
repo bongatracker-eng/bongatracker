@@ -14,29 +14,53 @@
         .leaflet-layer, .leaflet-control-zoom-in, .leaflet-control-zoom-out, .leaflet-control-attribution {
             filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
         }
+        .map-wrap { position: relative; }
+        .map-layer-panel {
+            position: absolute; top: 10px; right: 10px; z-index: 500;
+            background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(51,65,85,0.9);
+            border-radius: 0.75rem; padding: 10px 12px; font-size: 11px; color: #cbd5e1;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4); max-width: 190px;
+        }
+        .map-layer-panel label { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; cursor: pointer; font-weight: 600; }
+        .map-layer-panel label:last-child { margin-bottom: 0; }
+        .map-layer-panel input[type="checkbox"] { accent-color: #06b6d4; width: 13px; height: 13px; }
+        .hazard-swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:2px; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
     <!-- Top Navigation Bar -->
-    <nav class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex justify-between items-center shadow-md">
-        <div class="flex items-center space-x-3">
-            <h1 class="text-2xl font-black text-white tracking-wider">Boñga<span class="text-cyan-400">Track</span></h1>
-            <span class="bg-slate-700 text-cyan-300 text-xs px-2.5 py-1 rounded-full font-semibold border border-slate-600">BRGY. 53, LEGAZPI CITY</span>
-        </div>
-        <div class="hidden md:flex items-center space-x-6 text-sm font-semibold">
-            <a href="/" class="text-cyan-400 flex items-center"><i class="fas fa-chart-line mr-2"></i>DASHBOARD</a>
-            <a href="/registration" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-user-plus mr-2"></i>REGISTRATION</a>
-            <a href="/inventory" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-boxes mr-2"></i>INVENTORY</a>
-            <a href="/analytics" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-chart-pie mr-2"></i>ANALYTICS</a>
-            <a href="/sms" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-sms mr-2"></i>SMS ALERTS</a>
-        </div>
-        <div>
-            <button onclick="handleLogout()" class="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-4 py-2 rounded-xl text-sm font-bold transition flex items-center">
-                <i class="fas fa-sign-out-alt mr-2"></i>Logout
-            </button>
-        </div>
-    </nav>
+<nav class="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 flex justify-between items-center shadow-md">
+    <div class="flex items-center space-x-3">
+        <h1 class="text-2xl font-black text-white tracking-wider">Boñga<span class="text-cyan-400">Track</span></h1>
+        <span class="hidden sm:inline-block bg-slate-700 text-cyan-300 text-xs px-2.5 py-1 rounded-full font-semibold border border-slate-600">BRGY. 53, LEGAZPI CITY</span>
+    </div>
+
+    <div class="hidden md:flex items-center space-x-6 text-sm font-semibold">
+        <a href="/" class="text-cyan-400 flex items-center"><i class="fas fa-chart-line mr-2"></i>DASHBOARD</a>
+        <a href="/registration" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-user-plus mr-2"></i>REGISTRATION</a>
+        <a href="/inventory" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-boxes mr-2"></i>INVENTORY</a>
+        <a href="/analytics" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-chart-pie mr-2"></i>ANALYTICS</a>
+        <a href="/sms" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-sms mr-2"></i>SMS ALERTS</a>
+    </div>
+
+    <div class="flex items-center space-x-2">
+        <button onclick="handleLogout()" class="bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/50 px-3 py-2 rounded-xl text-sm font-bold transition flex items-center">
+            <i class="fas fa-sign-out-alt md:mr-2"></i><span class="hidden md:inline">Logout</span>
+        </button>
+        <button onclick="toggleMobileMenu()" aria-label="Menu" class="md:hidden bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 w-10 h-10 rounded-xl flex items-center justify-center">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</nav>
+
+<div id="mobileMenu" class="hidden md:hidden bg-slate-800 border-b border-slate-700 px-6 py-3 space-y-1 text-sm font-semibold">
+    <a href="/" class="block py-2 text-cyan-400"><i class="fas fa-chart-line mr-2"></i>DASHBOARD</a>
+    <a href="/registration" class="block py-2 text-slate-300"><i class="fas fa-user-plus mr-2"></i>REGISTRATION</a>
+    <a href="/inventory" class="block py-2 text-slate-300"><i class="fas fa-boxes mr-2"></i>INVENTORY</a>
+    <a href="/analytics" class="block py-2 text-slate-300"><i class="fas fa-chart-pie mr-2"></i>ANALYTICS</a>
+    <a href="/sms" class="block py-2 text-slate-300"><i class="fas fa-sms mr-2"></i>SMS ALERTS</a>
+</div>
 
     <!-- Main Content Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
@@ -80,7 +104,7 @@
 
         <!-- Main Workspace: Left (Map & Windy) & Right (Broadcast Settings + Evac Center Occupancy) -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
+
             <!-- Left Side: Live BDRRMC Emergency Radar & Windy Weather Widget -->
             <div class="lg:col-span-2 bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex flex-col space-y-4">
                 <div class="flex justify-between items-center">
@@ -96,7 +120,18 @@
                         </span>
                     </div>
                 </div>
-                <div id="map" class="map-container"></div>
+
+                <div class="map-wrap">
+                    <div id="map" class="map-container"></div>
+                    <div class="map-layer-panel">
+                        <p class="uppercase text-slate-400 font-bold mb-1.5 tracking-wider" style="font-size:9px;">Map Layers</p>
+                        <label><input type="checkbox" id="layerHouseholds" checked onchange="toggleHazardLayer('households', this.checked)"><span class="hazard-swatch" style="background:#22d3ee"></span>Live Households</label>
+                        <label><input type="checkbox" id="layerEvac" checked onchange="toggleHazardLayer('evac', this.checked)"><span class="hazard-swatch" style="background:#10b981"></span>Evacuation Centers</label>
+                        <label><input type="checkbox" id="layerDanger" checked onchange="toggleHazardLayer('danger', this.checked)"><span class="hazard-swatch" style="background:#dc2626"></span>Mayon Danger Zones</label>
+                        <label><input type="checkbox" id="layerLahar" checked onchange="toggleHazardLayer('lahar', this.checked)"><span class="hazard-swatch" style="background:#92400e"></span>Lahar Corridor</label>
+                    </div>
+                </div>
+                <p class="text-[10px] text-amber-400/80 -mt-2"><i class="fas fa-triangle-exclamation mr-1"></i>Danger zone / lahar corridor geometry is a planning placeholder — replace with the official PHIVOLCS/MDRRMO hazard map for Boñga.</p>
 
                 <!-- Windy Weather Integration Widget -->
                 <div class="border-t border-slate-700 pt-4">
@@ -112,7 +147,7 @@
 
             <!-- Right Side: System Broadcast Settings & Evac Center Occupancy Stacked -->
             <div class="space-y-6 flex flex-col">
-                
+
                 <!-- System Broadcast Settings Box -->
                 <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg flex flex-col justify-between space-y-4">
                     <div>
@@ -170,24 +205,13 @@
                     <p class="text-xs text-slate-400 mb-4">Click <strong>"Return"</strong> on resident bubbles to check them out back home.</p>
 
                     <div class="space-y-4">
-                        <!-- Boñga Elementary School Occupants -->
+                        <!-- Gogon High School Occupants -->
                         <div class="bg-slate-900/60 border border-slate-700 p-3 rounded-xl">
                             <h4 class="font-bold text-white text-xs mb-2 flex items-center justify-between">
-                                <span class="flex items-center"><i class="fas fa-school text-cyan-400 mr-1.5"></i>Boñga Elem. School</span>
-                                <span id="schoolBadge" class="bg-cyan-900/60 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full border border-cyan-700">0 Occupants</span>
+                                <span class="flex items-center"><i class="fas fa-school text-cyan-400 mr-1.5"></i>Gogon High School</span>
+                                <span id="schoolBadge" class="bg-cyan-900/60 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full border border-cyan-700">0 / 500</span>
                             </h4>
                             <div id="schoolOccupants" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
-                                <p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>
-                            </div>
-                        </div>
-
-                        <!-- Boñga Barangay Hall Occupants -->
-                        <div class="bg-slate-900/60 border border-slate-700 p-3 rounded-xl">
-                            <h4 class="font-bold text-white text-xs mb-2 flex items-center justify-between">
-                                <span class="flex items-center"><i class="fas fa-building text-cyan-400 mr-1.5"></i>Boñga Barangay Hall</span>
-                                <span id="hallBadge" class="bg-cyan-900/60 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full border border-cyan-700">0 Occupants</span>
-                            </h4>
-                            <div id="hallOccupants" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1">
                                 <p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>
                             </div>
                         </div>
@@ -202,9 +226,12 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Shared hazard-map config (Mayon danger zones, evac centers, lahar corridor) -->
+    <script src="{{ url_for('static', filename='hazard-map.js') }}"></script>
     <script>
         let map;
         let markersLayer = L.layerGroup();
+        let hazardLayers = null;
         let allMarkerCoords = [];
         let hasAutoZoomed = false;
 
@@ -221,6 +248,31 @@
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
             markersLayer.addTo(map);
+
+            if (typeof HazardMap !== "undefined") {
+                hazardLayers = HazardMap.buildHazardLayers(L);
+                hazardLayers.evacCenterLayer.addTo(map);
+                hazardLayers.dangerZoneLayer.addTo(map);
+                hazardLayers.laharLayer.addTo(map);
+
+                // Reflect current evac-center capacities in the occupancy cards.
+                const school = HazardMap.EVAC_CENTERS.find(c => c.id === 'school');
+                if (school) window.__schoolCapacity = school.capacity;
+            }
+        }
+
+        function toggleHazardLayer(which, isOn) {
+            if (which === 'households') {
+                if (isOn) markersLayer.addTo(map); else map.removeLayer(markersLayer);
+                return;
+            }
+            if (!hazardLayers) return;
+            const layer = which === 'evac' ? hazardLayers.evacCenterLayer
+                        : which === 'danger' ? hazardLayers.dangerZoneLayer
+                        : which === 'lahar' ? hazardLayers.laharLayer
+                        : null;
+            if (!layer) return;
+            if (isOn) layer.addTo(map); else map.removeLayer(layer);
         }
 
         async function loadDashboardData() {
@@ -274,9 +326,7 @@
 
         function renderEvacBubbles(residents) {
             let schoolHTML = "";
-            let hallHTML = "";
             let schoolCount = 0;
-            let hallCount = 0;
 
             residents.forEach(res => {
                 if (res.members) {
@@ -290,23 +340,17 @@
                                     </button>
                                 </div>
                             `;
-                            if (m.evac_center && m.evac_center.toLowerCase().includes('school')) {
-                                schoolHTML += bubble;
-                                schoolCount++;
-                            } else {
-                                hallHTML += bubble;
-                                hallCount++;
-                            }
+                            schoolHTML += bubble;
+                            schoolCount++;
                         }
                     });
                 }
             });
 
             document.getElementById('schoolOccupants').innerHTML = schoolHTML || '<p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>';
-            document.getElementById('hallOccupants').innerHTML = hallHTML || '<p class="text-slate-500 text-xs italic py-1">No occupants checked in.</p>';
-            
-            document.getElementById('schoolBadge').innerText = `${schoolCount} Occupants`;
-            document.getElementById('hallBadge').innerText = `${hallCount} Occupants`;
+
+            const schoolCap = window.__schoolCapacity || 500;
+            document.getElementById('schoolBadge').innerText = `${schoolCount} / ${schoolCap}`;
         }
 
         async function checkoutMember(memberId) {
@@ -352,7 +396,7 @@
                     body: JSON.stringify({ evac_active, evac_message, relief_active, relief_location })
                 });
                 const result = await response.json();
-                
+
                 if(result.success || response.ok) {
                     const statusDiv = document.getElementById('broadcastStatus');
                     statusDiv.classList.remove('hidden');
@@ -381,6 +425,9 @@
         function setReliefPreset(locationName) {
             document.getElementById('reliefLocationInput').value = `RELIEF DISTRIBUTION READY: Family food packs are now ready for claiming at the ${locationName}. Bring your QR ID cards.`;
             document.getElementById('reliefActiveToggle').checked = true;
+        }
+        function toggleMobileMenu() {
+    document.getElementById('mobileMenu').classList.toggle('hidden');
         }
 
         async function handleLogout() {

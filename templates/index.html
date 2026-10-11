@@ -292,28 +292,47 @@
             if (event.persisted || (performance.navigation && performance.navigation.type === 2)) {
                 const currentToken = getResidentId();
                 const currentRole = localStorage.getItem("bongaRole");
-                if (!currentToken || currentRole === "admin" || currentToken === "admin") {
+                const currentUserType = localStorage.getItem("userType");
+                if (!currentToken) {
                     window.location.replace("/login?logged_out=true");
+                } else if (currentRole === "admin" || currentUserType === "admin" || currentToken === "admin") {
+                    // Admins must never be rendered in the resident shell
+                    window.location.replace("/admin_dashboard");
                 } else {
                     loadResidentProfile(currentToken);
                 }
             }
         });
 
+
         window.addEventListener("DOMContentLoaded", () => {
             residentId = getResidentId();
             const currentRole = localStorage.getItem("bongaRole");
+            const currentUserType = localStorage.getItem("userType");
 
             if (!residentId) {
                 window.location.replace("/login?logged_out=true");
                 return;
             }
+
+            // If an admin session reaches this page (e.g. via the installed app
+            // start_url), send them to the admin dashboard instead of showing
+            // the resident interface.
+            if (currentRole === "admin" || currentUserType === "admin" || residentId === "admin") {
+                window.location.replace("/admin_dashboard");
+                return;
+            }
+
             saveResidentId(residentId);
 
             if (residentId && residentId !== "null") {
                 localStorage.setItem("bongaAuthToken", "authenticated");
                 localStorage.setItem("residentId", residentId);
-                localStorage.setItem("bongaRole", "resident");
+                // Never overwrite an existing role: this used to downgrade
+                // admins to "resident" on every visit to this page.
+                if (!localStorage.getItem("bongaRole")) {
+                    localStorage.setItem("bongaRole", "resident");
+                }
             }
 
             document.getElementById("residentIdDisplay").innerText = residentId;
@@ -321,6 +340,7 @@
             loadNotifications();
             initPersistentTracking();
         });
+
 
         function initPersistentTracking() {
             if (!navigator.geolocation) {

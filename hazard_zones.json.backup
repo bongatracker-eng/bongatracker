@@ -1,0 +1,157 @@
+{
+  "barangay": {
+    "center": [
+      13.1391,
+      123.7438
+    ],
+    "name": "Barangay Boñga (Brgy. 53), Legazpi City",
+    "zoom": 15
+  },
+  "volcano": {
+    "name": "Mayon Volcano",
+    "summit": [
+      13.2572,
+      123.6856
+    ],
+    "zones": [
+      {
+        "label": "Permanent Danger Zone (6 km)",
+        "radius_km": 6,
+        "severity": "extreme"
+      },
+      {
+        "label": "Extended Danger Zone (7 km)",
+        "radius_km": 7,
+        "severity": "high"
+      },
+      {
+        "label": "Extended Danger Zone (8 km)",
+        "radius_km": 8,
+        "severity": "moderate"
+      }
+    ]
+  },
+  "evacuation_centers": [
+    {
+      "capacity": 500,
+      "contact": "BDRRMC Boñga",
+      "coords": [
+        13.154776363870775,
+        123.7455717013404
+      ],
+      "name": "Gogon High School",
+      "notes": "Primary shelter — Gogon High School, Legazpi City.",
+      "short": "school"
+    },
+    {
+      "capacity": 200,
+      "contact": "Barangay Boñga",
+      "coords": [
+        13.1402,
+        123.745
+      ],
+      "name": "Boñga Barangay Hall Evacuation Shelter",
+      "notes": "Secondary shelter. Command post and relief depot.",
+      "short": "hall"
+    }
+  ],
+  "assembly_points": [],
+  "lahar_corridors": [
+    {
+      "centerline": [
+        [
+          13.201,
+          123.718
+        ],
+        [
+          13.183,
+          123.725
+        ],
+        [
+          13.165,
+          123.731
+        ],
+        [
+          13.15,
+          123.737
+        ],
+        [
+          13.14,
+          123.7415
+        ]
+      ],
+      "name": "Boñga channel (placeholder centreline)",
+      "notes": "Trace the real channel from the PHIVOLCS lahar hazard map.",
+      "severity": "high",
+      "width_m": 260
+    }
+  ],
+  "flood_zones": [
+    {
+      "name": "Coastal surge / tidal flooding (placeholder)",
+      "notes": "Low-lying coastal strip. Replace with the city's storm-surge hazard layer.",
+      "polygon": [
+        [
+          13.144,
+          123.752
+        ],
+        [
+          13.136,
+          123.753
+        ],
+        [
+          13.133,
+          123.747
+        ],
+        [
+          13.1395,
+          123.7462
+        ]
+      ],
+      "severity": "moderate"
+    }
+  ],
+  "routes": [
+    {
+      "name": "Purok 1A → Boñga Elementary School",
+      "notes": "Placeholder. Walk the real route with the barangay tanod and re-trace it.",
+      "path": [
+        [
+          13.1371,
+          123.7405
+        ],
+        [
+          13.1378,
+          123.7412
+        ],
+        [
+          13.1386,
+          123.7421
+        ]
+      ],
+      "status": "open",
+      "to": "Gogon High School"
+    },
+    {
+      "name": "Purok 5 → Barangay Hall",
+      "notes": "Placeholder route.",
+      "path": [
+        [
+          13.1415,
+          123.7468
+        ],
+        [
+          13.1409,
+          123.7458
+        ],
+        [
+          13.1402,
+          123.745
+        ]
+      ],
+      "status": "open",
+      "to": "Boñga Barangay Hall Evacuation Shelter"
+    }
+  ],
+  "_note": "PLACEHOLDER GEOMETRY. The evacuation centres are real; every hazard boundary and route below is a rough placeholder so the map has something to draw. Replace them with the PHIVOLCS Mayon hazard map and the CDRRMO / BDRRMC evacuation plan for Brgy. Boñga before this is used for a real operation. You can trace replacements directly on the map using 'Trace a zone' and press Save."
+}

@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Volunteers - BoñgaTrack{% endblock %}
+
+{% block content %}
+<main class="container mx-auto px-4 md:px-6 py-8 flex-grow relative z-10">
+
+    <div class="flex items-center space-x-3 mb-6 border-b border-slate-700 pb-4">
+        <i class="fas fa-hands-helping text-3xl text-cyan-400"></i>
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-white tracking-wide">Volunteer Accounts</h1>
+            <p class="text-gray-400 text-sm mt-1">Volunteers can log incoming stock, scan relief claims, register households and check evacuees in. Everything they do appears here and in your dashboard.</p>
+        </div>
+    </div>
+
+    <!-- CREATE -->
+    <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl mb-8">
+        <h2 class="text-lg font-bold text-white mb-4"><i class="fas fa-user-plus text-emerald-400 mr-2"></i>Add a Volunteer</h2>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div class="md:col-span-5">
+                <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Full name</label>
+                <input type="text" id="volName" maxlength="60" placeholder="e.g. Maria Santos" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+            </div>
+            <div class="md:col-span-4">
+                <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Mobile (optional, can also be used to log in)</label>
+                <input type="text" id="volMobile" maxlength="11" inputmode="numeric" placeholder="09123456789" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+            </div>
+            <div class="md:col-span-3">
+                <button onclick="createVolunteer()" id="createBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-white text-sm transition shadow-lg">Create Account</button>
+            </div>
+        </div>
+        <p id="createFeedback" class="text-sm font-bold mt-3 hidden"></p>
+        <p class="text-[11px] text-gray-500 mt-3">A Volunteer ID and a 6-digit starter PIN are generated. The PIN is shown only once, so give it to the volunteer right away.</p>
+    </div>
+
+    <!-- LIST -->
+    <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-white">Accounts</h2>
+            <span id="volCount" class="text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2.5 py-1 rounded-full font-mono font-bold">0</span>
+        </div>
+        <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[800px]">
+                <thead class="bg-slate-900 text-gray-400 uppercase text-[10px] border-b border-slate-800">
+                    <tr>
+                        <th class="p-3">Volunteer</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Last login</th>
+                        <th class="p-3 text-center">Claims</th>
+                        <th class="p-3 text-center">Registered</th>
+                        <th class="p-3 text-center">Check-ins</th>
+                        <th class="p-3 text-center">Stock in</th>
+                        <th class="p-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="volTable" class="divide-y divide-slate-800 text-sm text-gray-300"></tbody>
+            </table>
+        </div>
+        <p class="text-[11px] text-gray-500 mt-3">Disabling an account signs that volunteer out right away, even if their phone is already logged in. Use it if a phone is lost.</p>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl">
+        <h2 class="text-lg font-bold text-white mb-4"><i class="fas fa-clipboard-list text-amber-400 mr-2"></i>Recent Volunteer Activity</h2>
+        <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto max-h-[420px] overflow-y-auto">
+            <table class="w-full text-left border-collapse min-w-[680px]">
+                <thead class="bg-slate-900 text-gray-400 uppercase text-[10px] sticky top-0 border-b border-slate-800">
+                    <tr>
+                        <th class="p-3">Time</th>
+                        <th class="p-3">Volunteer</th>
+                        <th class="p-3">Action</th>
+                        <th class="p-3">Household</th>
+                        <th class="p-3">Details</th>
+                    </tr>
+                </thead>
+                <tbody id="activityTable" class="divide-y divide-slate-800 text-xs text-gray-300"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- CREDENTIALS POPUP -->
+    <div id="credModal" class="fixed inset-0 bg-black/80 z-[9999] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div class="bg-emerald-700 p-4">
+                <h2 id="credTitle" class="text-base font-bold text-white uppercase tracking-wide">Volunteer Login Ready</h2>
+            </div>
+            <div class="p-6 text-center space-y-4">
+                <div>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-widest">Volunteer</p>
+                    <p id="credName" class="text-xl font-black text-white"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                        <p class="text-[10px] text-gray-400 uppercase">Volunteer ID</p>
+                        <p id="credId" class="text-cyan-400 font-mono font-bold text-lg"></p>
+                    </div>
+                    <div class="bg-slate-950 border border-emerald-500/50 rounded-xl p-3">
+                        <p class="text-[10px] text-gray-400 uppercase">Starter PIN</p>
+                        <p id="credPin" class="text-emerald-400 font-mono font-bold text-lg"></p>
+                    </div>
+                </div>
+                <p class="text-[11px] text-amber-300"><i class="fas fa-triangle-exclamation mr-1"></i>This PIN is shown only once. The volunteer should change it after logging in.</p>
+                <div class="flex gap-2">
+                    <button onclick="copyCreds()" id="copyBtn" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-bold text-white transition"><i class="fas fa-copy mr-1"></i>Copy</button>
+                    <button onclick="closeCred()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-bold text-white transition">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    function esc(s) {
+        return String(s === null || s === undefined ? "" : s)
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    let lastCreds = null;
+
+    function say(text, good) {
+        const el = $("createFeedback");
+        el.innerText = text;
+        el.className = "text-sm font-bold mt-3 " + (good ? "text-green-400" : "text-red-400");
+    }
+
+    async function api(url, method, body) {
+        const res = await fetch(url, {
+            method: method || "GET",
+            headers: { "Content-Type": "application/json" },
+            body: body ? JSON.stringify(body) : undefined,
+            cache: "no-store"
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) {}
+        return { ok: res.ok, status: res.status, data: data };
+    }
+
+    function showCreds(title, d) {
+        lastCreds = d;
+        $("credTitle").innerText = title;
+        $("credName").innerText = d.name;
+        $("credId").innerText = d.id;
+        $("credPin").innerText = d.pin;
+        $("copyBtn").innerHTML = '<i class="fas fa-copy mr-1"></i>Copy';
+        $("credModal").classList.remove("hidden");
+    }
+
+    function closeCred() {
+        $("credModal").classList.add("hidden");
+        lastCreds = null;
+        $("credPin").innerText = "";
+    }
+
+    async function copyCreds() {
+        if (!lastCreds) return;
+        const text = "BoñgaTrack volunteer login\nName: " + lastCreds.name + "\nVolunteer ID: " + lastCreds.id + "\nStarter PIN: " + lastCreds.pin;
+        try {
+            await navigator.clipboard.writeText(text);
+            $("copyBtn").innerHTML = '<i class="fas fa-check mr-1"></i>Copied';
+        } catch (e) {
+            $("copyBtn").innerText = "Copy not allowed here";
+        }
+    }
+
+    async function createVolunteer() {
+        const btn = $("createBtn");
+        const name = $("volName").value.trim();
+        const mobile = $("volMobile").value.trim();
+        if (name.length < 2) return say("Enter the volunteer's full name.", false);
+
+        btn.disabled = true;
+        const r = await api("/api/admin/volunteers", "POST", { name: name, mobile: mobile });
+        btn.disabled = false;
+
+        if (r.ok && r.data.status === "success") {
+            say("", true);
+            $("createFeedback").classList.add("hidden");
+            $("volName").value = "";
+            $("volMobile").value = "";
+            showCreds("Volunteer Login Ready", r.data);
+            loadVolunteers();
+        } else {
+            $("createFeedback").classList.remove("hidden");
+            say(r.data.message || "Could not create the account.", false);
+        }
+    }
+
+    async function resetPin(id, name) {
+        if (!confirm("Reset the PIN for " + name + "? Their old PIN stops working immediately.")) return;
+        const r = await api("/api/admin/volunteers/" + encodeURIComponent(id) + "/reset-pin", "POST");
+        if (r.ok && r.data.status === "success") { showCreds("New PIN Ready", r.data); loadVolunteers(); }
+        else alert(r.data.message || "Could not reset the PIN.");
+    }
+
+    async function setActive(id, name, active) {
+        const msg = active
+            ? "Enable " + name + "? They will be able to log in again."
+            : "Disable " + name + "? They are signed out immediately and cannot log in.";
+        if (!confirm(msg)) return;
+        const r = await api("/api/admin/volunteers/" + encodeURIComponent(id) + "/active", "POST", { active: active });
+        if (r.ok) loadVolunteers(); else alert(r.data.message || "Could not change the account.");
+    }
+
+    async function removeVolunteer(id, name) {
+        if (!confirm("Delete the account of " + name + " (" + id + ")?\nTheir past activity stays in the records.")) return;
+        const r = await api("/api/admin/volunteers/" + encodeURIComponent(id) + "/delete", "POST");
+        if (r.ok) loadVolunteers(); else alert(r.data.message || "Could not delete the account.");
+    }
+
+    async function loadVolunteers() {
+        const r = await api("/api/admin/volunteers");
+        if (!r.ok) {
+            $("volTable").innerHTML = '<tr><td colspan="8" class="text-center py-6 text-red-400">Could not load volunteers (' + esc(r.status) + '). Are you logged in as admin?</td></tr>';
+            return;
+        }
+        const list = r.data.volunteers || [];
+        $("volCount").innerText = list.length;
+        if (list.length === 0) {
+            $("volTable").innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-500">No volunteers yet. Add one above.</td></tr>';
+            return;
+        }
+        $("volTable").innerHTML = list.map((v) => {
+            const active = !!v.active;
+            const status = active
+                ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">Active</span>'
+                : '<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-rose-500/20 text-rose-300 border-rose-500/30">Disabled</span>';
+            const pinNote = v.must_change_pin ? '<span class="block text-[10px] text-amber-400 mt-1">Still on starter PIN</span>' : "";
+            return '<tr class="hover:bg-slate-900/50 transition">' +
+                '<td class="p-3"><p class="font-bold text-white">' + esc(v.name) + '</p>' +
+                    '<p class="text-[11px] font-mono text-cyan-400">' + esc(v.id) + (v.mobile ? ' &bull; ' + esc(v.mobile) : '') + '</p></td>' +
+                '<td class="p-3">' + status + pinNote + '</td>' +
+                '<td class="p-3 text-xs text-gray-400">' + esc(v.last_login || "Never") + '</td>' +
+                '<td class="p-3 text-center font-bold text-cyan-300">' + esc(v.claims) + '</td>' +
+                '<td class="p-3 text-center font-bold text-emerald-300">' + esc(v.registrations) + '</td>' +
+                '<td class="p-3 text-center font-bold text-amber-300">' + esc(v.checkins) + '</td>' +
+                '<td class="p-3 text-center font-bold text-purple-300">' + esc(v.restocks) + '</td>' +
+                '<td class="p-3 text-right whitespace-nowrap space-x-1.5">' +
+                    '<button data-act="reset" data-id="' + esc(v.id) + '" data-name="' + esc(v.name) + '" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-bold text-white transition">Reset PIN</button>' +
+                    '<button data-act="' + (active ? "disable" : "enable") + '" data-id="' + esc(v.id) + '" data-name="' + esc(v.name) + '" class="px-2.5 py-1 ' + (active ? "bg-amber-900/60 hover:bg-amber-800 border-amber-700 text-amber-200" : "bg-emerald-900/60 hover:bg-emerald-800 border-emerald-700 text-emerald-200") + ' border rounded text-xs font-bold transition">' + (active ? "Disable" : "Enable") + '</button>' +
+                    '<button data-act="delete" data-id="' + esc(v.id) + '" data-name="' + esc(v.name) + '" class="px-2.5 py-1 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded text-xs transition"><i class="fas fa-trash"></i></button>' +
+                "</td></tr>";
+        }).join("");
+    }
+
+    // One click handler for every row button (avoids putting names inside onclick="...")
+    document.addEventListener("click", function (e) {
+        const b = e.target.closest("button[data-act]");
+        if (!b) return;
+        const id = b.dataset.id, name = b.dataset.name;
+        if (b.dataset.act === "reset") resetPin(id, name);
+        else if (b.dataset.act === "disable") setActive(id, name, false);
+        else if (b.dataset.act === "enable") setActive(id, name, true);
+        else if (b.dataset.act === "delete") removeVolunteer(id, name);
+    });
+
+    async function loadActivity() {
+        const r = await api("/api/admin/volunteers/activity?limit=100");
+        if (!r.ok) return;
+        const rows = r.data.activity || [];
+        if (rows.length === 0) {
+            $("activityTable").innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-500">No volunteer activity yet.</td></tr>';
+            return;
+        }
+        $("activityTable").innerHTML = rows.map((a) => {
+            let color = "text-blue-300";
+            if (a.action === "REGISTERED HOUSEHOLD") color = "text-emerald-300";
+            if (a.action === "EVACUATION CHECK-IN") color = "text-amber-300";
+            if (a.action === "STOCK ADDED") color = "text-purple-300";
+            return '<tr class="hover:bg-slate-900/50 transition">' +
+                '<td class="p-3 whitespace-nowrap text-gray-400">' + esc(a.time) + "</td>" +
+                '<td class="p-3"><span class="font-bold text-white">' + esc(a.user_name) + '</span><br><span class="font-mono text-[10px] text-gray-500">' + esc(a.user_id) + "</span></td>" +
+                '<td class="p-3 font-bold ' + color + '">' + esc(a.action) + "</td>" +
+                '<td class="p-3">' + esc(a.household || "") + '<br><span class="font-mono text-[10px] text-gray-500">' + esc(a.resident_id || "") + "</span></td>" +
+                '<td class="p-3 text-gray-400">' + esc(a.details || "") + "</td></tr>";
+        }).join("");
+    }
+
+    window.addEventListener("load", function () {
+        loadVolunteers();
+        loadActivity();
+        setInterval(function () { loadVolunteers(); loadActivity(); }, 15000);
+    });
+</script>
+{% endblock %}

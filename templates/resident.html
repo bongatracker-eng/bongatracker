@@ -18,6 +18,9 @@
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet + Routing Machine (for the Evacuate tab map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#0b0f19">
     <style>
@@ -30,9 +33,34 @@
         .tab-content.active { display: flex; flex-direction: column; gap: 1rem; animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        /* Evacuate tab map */
+        #evacMapContainer { height: 260px; width: 100%; border-radius: 1rem; z-index: 5; }
+        .evac-map-wrap { position: relative; }
+        .evac-map-wrap .leaflet-layer { filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.25) brightness(0.65); }
+        .evac-layer-chip {
+            display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700;
+            padding: 5px 9px; border-radius: 9999px; background: rgba(15,23,42,0.75);
+            border: 1px solid rgba(148,163,184,0.25); color: #cbd5e1; cursor: pointer; user-select: none;
+        }
+        .evac-layer-chip input { accent-color: #38bdf8; width: 11px; height: 11px; }
+        .leaflet-routing-container { display: none !important; } /* we render our own summary line */
     </style>
 </head>
 <body class="flex flex-col min-h-screen pb-24 selection:bg-sky-500 selection:text-white">
+    <!-- ROLE GUARD: runs before paint. An admin must never see the resident shell. -->
+    <script>
+    (function () {
+        try {
+            var role  = (localStorage.getItem("bongaRole") || "").toLowerCase();
+            var utype = (localStorage.getItem("userType") || "").toLowerCase();
+            var rid   = (localStorage.getItem("residentId") || localStorage.getItem("resident_id") || "").toLowerCase();
+            if (role === "admin" || utype === "admin" || rid === "admin") {
+                window.location.replace("/");
+            }
+        } catch (e) {}
+    })();
+    </script>
 
     <!-- MOBILE APP CONTAINER FRAME -->
     <main class="w-full max-w-md mx-auto p-4 sm:p-5 flex-grow flex flex-col justify-between">
@@ -48,9 +76,9 @@
                     <p class="text-sm font-black text-white" id="headerHeadName">Resident Portal</p>
                 </div>
             </div>
-            <button onclick="logoutApp()" class="w-9 h-9 rounded-xl glass-card flex items-center justify-center text-gray-400 hover:text-sky-400 hover:border-sky-500/40 transition">
-                <i class="fas fa-power-off text-xs"></i>
-            </button>
+<button onclick="confirmLogout(logoutApp)" class="w-9 h-9 rounded-xl glass-card flex items-center justify-center text-gray-400 hover:text-sky-400 hover:border-sky-500/40 transition">
+    <i class="fas fa-power-off text-xs"></i>
+</button>
         </header>
 
         <!-- ================= TAB 1: HOME / DASHBOARD ================= -->
@@ -88,6 +116,7 @@
                 <div id="evacAlertBox" class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 hidden">
                     <p class="text-[10px] font-bold text-rose-400 uppercase">🚨 Evacuation Advisory</p>
                     <p class="text-xs text-rose-200 mt-1" id="evacMessageDesc">Loading advisory...</p>
+                    <button onclick="switchTab('evac')" class="mt-2 text-[10px] font-bold text-rose-300 underline">Find my nearest shelter &amp; route &rarr;</button>
                 </div>
 
                 <div id="reliefAlertBox" class="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3 hidden">
@@ -107,6 +136,20 @@
                     <span class="text-cyan-400" id="residentPurokDisplay">Purok --</span>
                 </div>
             </div>
+
+            <!-- QUICK LINK TO EVACUATION MAP -->
+            <button onclick="switchTab('evac')" class="glass-card rounded-2xl p-4 flex items-center justify-between text-left w-full hover:border-sky-500/40 transition">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
+                        <i class="fas fa-map-location-dot text-sky-400"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-white uppercase tracking-wide">Find My Evacuation Route</p>
+                        <p class="text-[10px] text-gray-400 mt-0.5">Nearest shelter, hazard zones & safest road route</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-500 text-xs"></i>
+            </button>
 
             <!-- INSTALL PWA CARD -->
             <div id="installAppCard" class="glass-card rounded-2xl p-4 border border-emerald-500/40 text-center space-y-3 hidden neon-glow-emerald">
@@ -135,7 +178,47 @@
 
         </div>
 
-        <!-- ================= TAB 2: FAMILY ROSTER ================= -->
+        <!-- ================= TAB 2: EVACUATE (NEAREST SHELTER + SAFE ROUTE) ================= -->
+        <div id="tab-evac" class="tab-content">
+
+            <div id="hazardStatusBanner" class="glass-card rounded-2xl p-3 border-l-4 border-slate-500 flex items-start space-x-2">
+                <i class="fas fa-location-crosshairs text-slate-400 mt-0.5"></i>
+                <p class="text-[11px] text-gray-300">Waiting for your GPS location to check nearby hazards...</p>
+            </div>
+
+            <div class="glass-card rounded-3xl p-4 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-sm font-bold text-white uppercase tracking-wide">Evacuation Map</h2>
+                    <button onclick="requestGPSAccess()" class="text-[10px] font-bold text-sky-400 hover:text-sky-300 transition"><i class="fas fa-crosshairs mr-1"></i>Locate Me</button>
+                </div>
+
+                <div class="evac-map-wrap">
+                    <div id="evacMapContainer"></div>
+                </div>
+
+                <div class="flex flex-wrap gap-1.5">
+                    <label class="evac-layer-chip"><input type="checkbox" checked onchange="toggleEvacLayer('evac', this.checked)"><span>Evac Centers</span></label>
+                    <label class="evac-layer-chip"><input type="checkbox" checked onchange="toggleEvacLayer('danger', this.checked)"><span>Danger Zones</span></label>
+                    <label class="evac-layer-chip"><input type="checkbox" checked onchange="toggleEvacLayer('lahar', this.checked)"><span>Lahar Corridor</span></label>
+                </div>
+                <p class="text-[9px] text-amber-400/80 leading-relaxed"><i class="fas fa-triangle-exclamation mr-1"></i>Hazard zone geometry shown is a planning placeholder pending the official PHIVOLCS/MDRRMO hazard map for Boñga.</p>
+
+                <button onclick="routeToNearestSafeShelter()" class="w-full py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center space-x-2">
+                    <i class="fas fa-person-running"></i>
+                    <span>Route Me to Nearest Safe Shelter</span>
+                </button>
+                <div id="routeSummary" class="hidden text-[11px] text-sky-200 bg-sky-500/10 border border-sky-500/30 rounded-xl p-2.5 text-center"></div>
+            </div>
+
+            <div class="space-y-2.5">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wide px-1">Nearby Evacuation Centers</h3>
+                <div id="shelterListContainer" class="space-y-2.5">
+                    <div class="text-center text-gray-500 py-4 text-xs">Loading shelters...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 3: FAMILY ROSTER ================= -->
         <div id="tab-family" class="tab-content">
             <div class="glass-card rounded-3xl p-5 space-y-4">
                 <div class="flex justify-between items-center border-b border-white/5 pb-3">
@@ -151,7 +234,7 @@
             </div>
         </div>
 
-        <!-- ================= TAB 3: QR CODE ID ================= -->
+        <!-- ================= TAB 4: QR CODE ID ================= -->
         <div id="tab-qr" class="tab-content">
             <div class="glass-card rounded-3xl p-6 text-center space-y-4 my-auto">
                 <div>
@@ -165,7 +248,7 @@
             </div>
         </div>
 
-        <!-- ================= TAB 4: SETTINGS / PROFILE ================= -->
+        <!-- ================= TAB 5: SETTINGS / PROFILE ================= -->
         <div id="tab-settings" class="tab-content">
             <div class="glass-card rounded-3xl p-5 space-y-5">
                 <div>
@@ -174,24 +257,26 @@
                 </div>
                 <div class="space-y-3">
                     <div>
-                        <label class="text-[10px] text-gray-400 uppercase font-mono block mb-1">Current 4-Digit PIN</label>
-                        <input type="password" id="oldPinInput" maxlength="4" placeholder="••••" class="w-full glass-card bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white text-center font-mono tracking-widest outline-none focus:border-sky-500">
+<label class="text-[10px] text-gray-400 uppercase font-mono block mb-1">Current 4-Digit PIN</label>
+<div class="relative">
+    <input type="password" id="oldPinInput" maxlength="4" placeholder="••••" class="w-full glass-card bg-slate-900/50 border border-white/10 rounded-xl pl-4 pr-11 py-3 text-xs text-white text-center font-mono tracking-widest outline-none focus:border-sky-500">
+    <button type="button" onclick="togglePin('oldPinInput', this)" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-sky-400 transition" title="Show or hide PIN" aria-label="Show or hide PIN" aria-pressed="false"><i class="fas fa-eye"></i></button>
+</div>
                     </div>
                     <div>
-                        <label class="text-[10px] text-gray-400 uppercase font-mono block mb-1">New 4-Digit PIN</label>
-                        <input type="password" id="newPinInput" maxlength="4" placeholder="••••" class="w-full glass-card bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white text-center font-mono tracking-widest outline-none focus:border-sky-500">
-                    </div>
-                    <button onclick="updatePin()" class="w-full py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
-                        Update Security PIN
-                    </button>
+<label class="text-[10px] text-gray-400 uppercase font-mono block mb-1">New 4-Digit PIN</label>
+<div class="relative">
+    <input type="password" id="newPinInput" maxlength="4" placeholder="••••" class="w-full glass-card bg-slate-900/50 border border-white/10 rounded-xl pl-4 pr-11 py-3 text-xs text-white text-center font-mono tracking-widest outline-none focus:border-sky-500">
+    <button type="button" onclick="togglePin('newPinInput', this)" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-sky-400 transition" title="Show or hide PIN" aria-label="Show or hide PIN" aria-pressed="false"><i class="fas fa-eye"></i></button>
+</div>
                     <p id="pinFeedback" class="text-[11px] text-center font-bold hidden"></p>
                 </div>
 
                 <div class="pt-4 border-t border-white/5">
-                    <button onclick="logoutApp()" class="w-full py-3 glass-card hover:bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Go Offline (Log Out)</span>
-                    </button>
+<button onclick="confirmLogout(logoutApp, 'Any unsaved updates on this device will be cleared.')" class="w-full py-3 glass-card hover:bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold text-xs rounded-xl transition flex items-center justify-center space-x-2">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Go Offline (Log Out)</span>
+</button>
                 </div>
             </div>
         </div>
@@ -207,21 +292,51 @@
         </div>
     </div>
 
+        <!-- ===== LOGOUT CONFIRMATION MODAL ===== -->
+    <div id="logoutModal" style="display:none"
+         class="fixed inset-0 z-[60] items-center justify-center bg-black/80 backdrop-blur-2xl px-6">
+        <div class="w-full max-w-sm glass-card rounded-3xl p-6 shadow-2xl">
+            <div class="flex items-start space-x-3">
+                <div class="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-500/40 flex items-center justify-center shrink-0">
+                    <i class="fas fa-power-off text-rose-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-white">Log out of Bo&ntilde;gaTrack?</h3>
+                    <p id="logoutModalText" class="text-[11px] text-gray-400 mt-1">You will need to sign in again to continue.</p>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button type="button" id="logoutCancelBtn"
+                        class="flex-1 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-white/10 text-gray-300 font-bold text-xs transition">
+                    Cancel
+                </button>
+                <button type="button" id="logoutOkBtn"
+                        class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-lg">
+                    Yes, log out
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- BOTTOM FLOATING NAVIGATION BAR (NEON GLASS) -->
     <nav class="fixed bottom-4 left-4 right-4 max-w-md mx-auto glass-nav rounded-2xl p-2 flex justify-around items-center z-40 shadow-2xl">
-        <button onclick="switchTab('home')" id="nav-btn-home" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-sky-400 transition">
+        <button onclick="switchTab('home')" id="nav-btn-home" class="flex flex-col items-center py-1.5 px-2.5 rounded-xl text-sky-400 transition">
             <i class="fas fa-home text-base mb-0.5"></i>
             <span class="text-[9px] font-bold uppercase tracking-wider">Home</span>
         </button>
-        <button onclick="switchTab('family')" id="nav-btn-family" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-gray-400 hover:text-white transition">
+        <button onclick="switchTab('evac')" id="nav-btn-evac" class="flex flex-col items-center py-1.5 px-2.5 rounded-xl text-gray-400 hover:text-white transition">
+            <i class="fas fa-map-location-dot text-base mb-0.5"></i>
+            <span class="text-[9px] font-bold uppercase tracking-wider">Evacuate</span>
+        </button>
+        <button onclick="switchTab('family')" id="nav-btn-family" class="flex flex-col items-center py-1.5 px-2.5 rounded-xl text-gray-400 hover:text-white transition">
             <i class="fas fa-users text-base mb-0.5"></i>
             <span class="text-[9px] font-bold uppercase tracking-wider">Family</span>
         </button>
-        <button onclick="switchTab('qr')" id="nav-btn-qr" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-gray-400 hover:text-white transition">
+        <button onclick="switchTab('qr')" id="nav-btn-qr" class="flex flex-col items-center py-1.5 px-2.5 rounded-xl text-gray-400 hover:text-white transition">
             <i class="fas fa-qrcode text-base mb-0.5"></i>
             <span class="text-[9px] font-bold uppercase tracking-wider">QR ID</span>
         </button>
-        <button onclick="switchTab('settings')" id="nav-btn-settings" class="flex flex-col items-center py-1.5 px-4 rounded-xl text-gray-400 hover:text-white transition">
+        <button onclick="switchTab('settings')" id="nav-btn-settings" class="flex flex-col items-center py-1.5 px-2.5 rounded-xl text-gray-400 hover:text-white transition">
             <i class="fas fa-gear text-base mb-0.5"></i>
             <span class="text-[9px] font-bold uppercase tracking-wider">Settings</span>
         </button>
@@ -229,6 +344,11 @@
 
     <!-- QR CODE GENERATOR CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- Leaflet + Routing Machine + shared hazard-map config (for the Evacuate tab) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+    <script src="{{ url_for('static', filename='hazard-map.js') }}"></script>
 
     <!-- FRONTEND APP LOGIC -->
     <script>
@@ -239,6 +359,14 @@
         let deferredPrompt = null;
         let lastEvacMessage = "";
         let lastReliefMessage = "";
+
+        // ---- Evacuate tab state ----
+        let lastKnownCoords = null;   // { lat, lon } - most recent GPS fix
+        let evacMap = null;
+        let evacMapReady = false;
+        let userLocationMarker = null;
+        let currentRouteControl = null;
+        let evacHazardLayers = null;
 
         window.addEventListener('beforeinstallprompt', function(e) {
             e.preventDefault();
@@ -272,10 +400,14 @@
             const activeBtn = document.getElementById('nav-btn-' + tabName);
             activeBtn.classList.remove('text-gray-400');
             activeBtn.classList.add('text-sky-400');
+
+            if (tabName === 'evac') {
+                setTimeout(initEvacMap, 60);
+            }
         }
 
         function getResidentId() {
-            return localStorage.getItem("residentId") || localStorage.getItem("resident_id") || localStorage.getItem("savedBongaUser") || sessionStorage.getItem("residentId") || sessionStorage.getItem("resident_id") || "BGN-13587";
+            return localStorage.getItem("residentId") || localStorage.getItem("resident_id") || localStorage.getItem("savedBongaUser") || sessionStorage.getItem("residentId") || sessionStorage.getItem("resident_id") || null;
         }
 
         function saveResidentId(id) {
@@ -294,10 +426,12 @@
             if (event.persisted || (performance.navigation && performance.navigation.type === 2)) {
                 var currentToken = getResidentId();
                 var currentRole = localStorage.getItem("bongaRole");
+                var currentUserType = localStorage.getItem("userType");
                 if (!currentToken) {
                     window.location.replace("/login?logged_out=true");
                 } else if (
                     String(currentRole || "").toLowerCase() === "admin" ||
+                    String(currentUserType || "").toLowerCase() === "admin" ||
                     String(currentToken || "").toLowerCase() === "admin"
                 ) {
                     window.location.replace("/");
@@ -315,16 +449,22 @@
                 var idStr = residentId ? String(residentId) : "";
                 var roleStr = currentRole ? String(currentRole) : "";
 
+                var utypeStr = (localStorage.getItem("userType") || "");
+
                 if (
                     idStr.toLowerCase() === "admin" ||
-                    roleStr.toLowerCase() === "admin"
+                    roleStr.toLowerCase() === "admin" ||
+                    utypeStr.toLowerCase() === "admin"
                 ) {
                     window.location.replace("/");
                     return;
                 }
 
+                // No silent test-account fallback: bounce to login instead of
+                // silently signing the visitor in as resident BGN-13587.
                 if (!residentId || residentId === "null" || residentId === "undefined") {
-                    residentId = "BGN-13587";
+                    window.location.replace("/login?logged_out=true");
+                    return;
                 }
 
                 saveResidentId(residentId);
@@ -348,6 +488,7 @@
                 loadResidentProfile(residentId);
                 loadNotifications();
                 initPersistentTracking();
+                updateHazardBannerAndShelters();
             } catch (err) {
                 var welcomeEl = document.getElementById("welcomeName");
                 if (welcomeEl) welcomeEl.innerText = "System Ready";
@@ -398,6 +539,10 @@
 
             sendLocationUpdate(residentId, latitude, longitude, accuracy);
 
+            lastKnownCoords = { lat: latitude, lon: longitude };
+            updateHazardBannerAndShelters();
+            if (evacMapReady) updateUserMarker(latitude, longitude);
+
             var now = Date.now();
             if (now - lastUpdateTime >= 15000) {
                 lastUpdateTime = now;
@@ -443,6 +588,162 @@
             } catch (e) {
                 console.error("Resident profile camera check error:", e);
             }
+        }
+
+        // ------------------------------------------------------------
+        // EVACUATE TAB: hazard status, nearest shelter, and safe routing
+        // ------------------------------------------------------------
+        function initEvacMap() {
+            if (evacMapReady) {
+                setTimeout(function () { evacMap.invalidateSize(); }, 100);
+                return;
+            }
+            if (typeof L === "undefined" || typeof HazardMap === "undefined") return;
+
+            const center = lastKnownCoords || HazardMap.BARANGAY_CENTER;
+            evacMap = L.map('evacMapContainer', { zoomControl: true }).setView([center.lat, center.lon], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(evacMap);
+
+            evacHazardLayers = HazardMap.buildHazardLayers(L);
+            evacHazardLayers.evacCenterLayer.addTo(evacMap);
+            evacHazardLayers.dangerZoneLayer.addTo(evacMap);
+            evacHazardLayers.laharLayer.addTo(evacMap);
+
+            if (lastKnownCoords) updateUserMarker(lastKnownCoords.lat, lastKnownCoords.lon);
+
+            evacMapReady = true;
+            setTimeout(function () { evacMap.invalidateSize(); }, 150);
+            renderShelterList();
+        }
+
+        function toggleEvacLayer(which, isOn) {
+            if (!evacHazardLayers || !evacMap) return;
+            const layer = which === 'evac' ? evacHazardLayers.evacCenterLayer
+                        : which === 'danger' ? evacHazardLayers.dangerZoneLayer
+                        : which === 'lahar' ? evacHazardLayers.laharLayer
+                        : null;
+            if (!layer) return;
+            if (isOn) layer.addTo(evacMap); else evacMap.removeLayer(layer);
+        }
+
+        function updateUserMarker(lat, lon) {
+            if (!evacMap) return;
+            if (userLocationMarker) {
+                userLocationMarker.setLatLng([lat, lon]);
+            } else {
+                const icon = L.divIcon({
+                    className: "",
+                    html: '<div style="background:#38bdf8;border:3px solid white;border-radius:9999px;width:16px;height:16px;box-shadow:0 0 10px rgba(56,189,248,0.9)"></div>',
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                });
+                userLocationMarker = L.marker([lat, lon], { icon: icon, zIndexOffset: 1000 })
+                    .addTo(evacMap)
+                    .bindPopup("You are here");
+            }
+        }
+
+        function renderShelterList() {
+            const container = document.getElementById('shelterListContainer');
+            if (!container || typeof HazardMap === "undefined") return;
+            const origin = lastKnownCoords || HazardMap.BARANGAY_CENTER;
+            const ranked = HazardMap.rankedEvacCenters(origin.lat, origin.lon);
+
+            container.innerHTML = "";
+            ranked.forEach(function (c, idx) {
+                const isRecommended = idx === 0 && !c.risky;
+                container.innerHTML +=
+                    '<div class="glass-card bg-slate-900/40 rounded-2xl p-3 border ' + (isRecommended ? 'border-emerald-500/50' : 'border-white/5') + '">' +
+                        '<div class="flex justify-between items-start gap-2">' +
+                            '<div>' +
+                                '<p class="font-bold text-white text-xs flex items-center flex-wrap gap-1.5">' +
+                                    escapeHtml(c.name) +
+                                    (isRecommended ? '<span class="text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-full uppercase">Nearest</span>' : '') +
+                                    (c.risky ? '<span class="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full uppercase">Check Route</span>' : '') +
+                                '</p>' +
+                                '<p class="text-[10px] text-gray-400 font-mono mt-0.5">' + HazardMap.formatDistance(c.distanceMeters) + ' away &bull; Capacity ' + c.capacity + '</p>' +
+                            '</div>' +
+                            '<button onclick="routeToShelter(\'' + c.id + '\')" class="bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition whitespace-nowrap">' +
+                                '<i class="fas fa-route mr-1"></i>Route' +
+                            '</button>' +
+                        '</div>' +
+                    '</div>';
+            });
+        }
+
+        function updateHazardBannerAndShelters() {
+            const banner = document.getElementById('hazardStatusBanner');
+            if (banner && typeof HazardMap !== "undefined") {
+                const origin = lastKnownCoords || HazardMap.BARANGAY_CENTER;
+                const status = HazardMap.dangerZoneStatus(origin.lat, origin.lon);
+
+                if (!lastKnownCoords) {
+                    banner.className = "glass-card rounded-2xl p-3 border-l-4 border-slate-500 flex items-start space-x-2";
+                    banner.innerHTML = '<i class="fas fa-location-crosshairs text-slate-400 mt-0.5"></i><p class="text-[11px] text-gray-300">Waiting for your GPS location to check nearby hazards...</p>';
+                } else if (status.inside) {
+                    banner.className = "glass-card rounded-2xl p-3 border-l-4 border-rose-500 flex items-start space-x-2";
+                    banner.innerHTML = '<i class="fas fa-triangle-exclamation text-rose-400 mt-0.5 animate-pulse"></i><p class="text-[11px] text-rose-200"><strong>You are inside the ' + escapeHtml(status.zone) + '.</strong> Evacuate to the nearest safe shelter now.</p>';
+                } else {
+                    banner.className = "glass-card rounded-2xl p-3 border-l-4 border-emerald-500 flex items-start space-x-2";
+                    banner.innerHTML = '<i class="fas fa-shield-heart text-emerald-400 mt-0.5"></i><p class="text-[11px] text-emerald-200">You are currently outside mapped hazard zones. Stay alert for BDRRMC advisories.</p>';
+                }
+            }
+            if (evacMapReady) renderShelterList();
+        }
+
+        function routeToShelter(centerId) {
+            if (!evacMap || typeof L === "undefined" || typeof L.Routing === "undefined" || typeof HazardMap === "undefined") {
+                alert("The map is still loading — please try again in a moment.");
+                return;
+            }
+            const center = HazardMap.EVAC_CENTERS.find(function (c) { return c.id === centerId; });
+            if (!center) return;
+            const origin = lastKnownCoords || HazardMap.BARANGAY_CENTER;
+
+            if (currentRouteControl) {
+                evacMap.removeControl(currentRouteControl);
+                currentRouteControl = null;
+            }
+
+            const summaryEl = document.getElementById('routeSummary');
+            if (summaryEl) {
+                summaryEl.classList.remove('hidden');
+                summaryEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Calculating route...';
+            }
+
+            currentRouteControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(origin.lat, origin.lon),
+                    L.latLng(center.lat, center.lon)
+                ],
+                routeWhileDragging: false,
+                addWaypoints: false,
+                draggableWaypoints: false,
+                show: false,
+                fitSelectedRoutes: true,
+                lineOptions: { styles: [{ color: '#38bdf8', weight: 5, opacity: 0.85 }] },
+                createMarker: function () { return null; }
+            }).on('routesfound', function (e) {
+                const r = e.routes[0];
+                const km = (r.summary.totalDistance / 1000).toFixed(1);
+                const mins = Math.round(r.summary.totalTime / 60);
+                if (summaryEl) {
+                    summaryEl.innerHTML = '<i class="fas fa-route mr-1"></i> Route to <strong>' + escapeHtml(center.name) + '</strong>: ' + km + ' km, about ' + mins + ' min by road.';
+                }
+            }).on('routingerror', function () {
+                if (summaryEl) {
+                    summaryEl.innerHTML = '<i class="fas fa-triangle-exclamation mr-1"></i> Could not calculate a road route right now. Head toward ' + escapeHtml(center.name) + ' directly.';
+                }
+            }).addTo(evacMap);
+        }
+
+        function routeToNearestSafeShelter() {
+            if (typeof HazardMap === "undefined") return;
+            const origin = lastKnownCoords || HazardMap.BARANGAY_CENTER;
+            const ranked = HazardMap.rankedEvacCenters(origin.lat, origin.lon);
+            if (ranked.length) routeToShelter(ranked[0].id);
         }
 
         // FULLY FIXED NOTIFICATION POLLING AND UI RENDERING FUNCTION
@@ -558,6 +859,44 @@
             window.location.replace("/login?logged_out=true");
         }
 
+                // ---- Logout confirmation modal (shared by both logout buttons) ----
+        var logoutAction = null;
+
+        function confirmLogout(fn, message) {
+            var modal = document.getElementById('logoutModal');
+            if (!modal) { if (typeof fn === 'function') fn(); return; }   // failsafe: never a dead logout
+            logoutAction = fn;
+            var txt = document.getElementById('logoutModalText');
+            if (txt) txt.innerText = message || 'You will need to sign in again to continue.';
+            modal.style.display = 'flex';   // inline style avoids the Tailwind hidden/flex clash
+            var okb = document.getElementById('logoutOkBtn');
+            if (okb) okb.focus();
+        }
+
+        function closeLogoutModal() {
+            var modal = document.getElementById('logoutModal');
+            if (modal) modal.style.display = 'none';
+            logoutAction = null;
+        }
+
+        (function initLogoutModal() {
+            var modal  = document.getElementById('logoutModal');
+            var ok     = document.getElementById('logoutOkBtn');
+            var cancel = document.getElementById('logoutCancelBtn');
+            if (!modal || !ok || !cancel) return;
+
+            cancel.addEventListener('click', closeLogoutModal);
+            modal.addEventListener('click', function (e) { if (e.target === modal) closeLogoutModal(); });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modal.style.display === 'flex') closeLogoutModal();
+            });
+            ok.addEventListener('click', function () {
+                var fn = logoutAction;   // capture before close resets it
+                closeLogoutModal();
+                if (typeof fn === 'function') fn();
+            });
+        })();
+
         function toggleFullscreenQR() {
             var modal = document.getElementById("qrFullscreenModal");
             if (modal) modal.classList.toggle("hidden");
@@ -598,6 +937,16 @@
 
             checkAndRequestCamera(resident.id || residentId);
         }
+
+        function togglePin(id, btn) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    const icon = btn ? btn.querySelector("i") : null;
+    if (icon) icon.className = reveal ? "fas fa-eye-slash" : "fas fa-eye";
+    if (btn) btn.setAttribute("aria-pressed", reveal ? "true" : "false");
+}
 
         async function loadResidentProfile(id) {
             try {
@@ -649,5 +998,6 @@
         // Live notification polling every 3 seconds
         setInterval(loadNotifications, 3000);
     </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

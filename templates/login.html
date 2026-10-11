@@ -46,34 +46,7 @@
     </div>
 
     <script>
-        window.onload = function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            
-            // STRICT LOGOUT PURGE: If flag is present, completely wipe local storage and stop execution to prevent loops
-            if (urlParams.get('logged_out') === 'true' || urlParams.get('logout') === 'success') {
-                localStorage.clear();
-                sessionStorage.clear();
-                window.history.replaceState({}, document.title, window.location.pathname);
-                return; 
-            }
-
-            // Only check auto-restore if we are NOT fresh from a logout
-            const existingToken = localStorage.getItem("bongaAuthToken");
-            const existingUserType = localStorage.getItem("userType");
-            const existingRole = localStorage.getItem("bongaRole");
-            const existingId = localStorage.getItem("residentId");
-
-            if (existingToken === "authenticated") {
-                if (existingUserType === "admin" || existingRole === "admin" || existingId === "admin") {
-                    window.location.replace("/analytics");
-                    return;
-                } else if (existingUserType === "resident" || existingRole === "resident") {
-                    window.location.replace("/resident-portal");
-                    return;
-                }
-            }
-
-            // Pre-fill saved fields if "Remember Me" was checked previously:
+        function prefillSavedLogin() {
             const savedIdentifier = localStorage.getItem("savedBongaUser");
             const savedPin = localStorage.getItem("savedBongaPin");
             if (savedIdentifier && savedPin) {
@@ -81,6 +54,57 @@
                 document.getElementById("pinInput").value = savedPin;
                 document.getElementById("remember").checked = true;
             }
+        }
+
+        window.onload = async function() {
+            const urlParams = new URLSearchParams(window.location.search);
+
+            // STRICT LOGOUT PURGE: If flag is present, completely wipe local storage and stop execution to prevent loops
+            if (urlParams.get('logged_out') === 'true' || urlParams.get('logout') === 'success') {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+
+            // Auto-restore only if the SERVER still has a live session.
+            // (Checking the server avoids a redirect loop when the cookie has expired
+            // but localStorage still remembers an old login.)
+            const existingToken = localStorage.getItem("bongaAuthToken");
+            if (existingToken === "authenticated") {
+                try {
+                    const res = await fetch('/api/check-session');
+                    if (res.ok) {
+                        const s = await res.json();
+                        const type = (s.user_type || "").toLowerCase();
+                        if (type === "admin") {
+                            localStorage.setItem("bongaRole", "admin");
+                            localStorage.setItem("userType", "admin");
+                            window.location.replace("/analytics");
+                            return;
+                        }
+                        if (type === "volunteer") {
+                            localStorage.setItem("bongaRole", "volunteer");
+                            localStorage.setItem("userType", "volunteer");
+                            window.location.replace("/volunteer");
+                            return;
+                        }
+                        localStorage.setItem("bongaRole", "resident");
+                        window.location.replace("/resident-portal");
+                        return;
+                    } else {
+                        // Server session is gone: drop the stale flags, keep "Remember Me" fields
+                        localStorage.removeItem("bongaAuthToken");
+                        localStorage.removeItem("bongaRole");
+                        localStorage.removeItem("userType");
+                        localStorage.removeItem("residentId");
+                        localStorage.removeItem("headName");
+                    }
+                } catch (e) { /* offline: fall through to the login form */ }
+            }
+
+            // Pre-fill saved fields if "Remember Me" was checked previously
+            prefillSavedLogin();
         };
 
         function togglePin() {
@@ -121,15 +145,18 @@
                 const data = await res.json();
 
                 if (data.status === "success") {
+                    const isAdmin = (data.user_type && data.user_type.toLowerCase() === "admin") || data.resident_id === "admin" || mobile.toLowerCase() === "admin" || (data.role && data.role.toLowerCase() === "admin");
+                    const isVolunteer = !isAdmin && data.user_type && data.user_type.toLowerCase() === "volunteer";
+
                     localStorage.setItem("bongaAuthToken", "authenticated");
                     localStorage.setItem("residentId", data.resident_id);
                     localStorage.setItem("headName", data.head_name);
                     localStorage.setItem("userType", data.user_type);
 
-                    const isAdmin = (data.user_type && data.user_type.toLowerCase() === "admin") || data.resident_id === "admin" || mobile.toLowerCase() === "admin" || (data.role && data.role.toLowerCase() === "admin");
-
                     if (isAdmin) {
                         localStorage.setItem("bongaRole", "admin");
+                    } else if (isVolunteer) {
+                        localStorage.setItem("bongaRole", "volunteer");
                     } else {
                         localStorage.setItem("bongaRole", "resident");
                     }
@@ -147,8 +174,13 @@
                         localStorage.removeItem("savedBongaPin");
                     }
 
+                    // Server-provided redirect (used for volunteers)
+                    if (data.redirect) { window.location.replace(data.redirect); return; }
+
                     if (isAdmin) {
                         window.location.replace("/analytics");
+                    } else if (isVolunteer) {
+                        window.location.replace("/volunteer");
                     } else {
                         window.location.replace("/resident-portal");
                     }
@@ -160,7 +192,7 @@
                 }
             } catch (err) {
                 errorMsg.innerText = "Connection error. Please try again.";
-                errorMsg.classList.add('hidden');
+                errorMsg.classList.remove('hidden');
                 btn.disabled = false;
                 btnText.innerText = "Secure Login";
             }

@@ -27,6 +27,10 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "bonga_data.db")
 
+# Vulnerability keywords that make a household a distribution priority
+# (senior citizens, pregnant women, and persons with disabilities).
+PRIORITY_KEYWORDS = ["senior", "pwd", "disab", "pregnan"]
+
 
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME, timeout=30)
@@ -43,6 +47,30 @@ def add_column(conn, table, column, definition):
         )
     except sqlite3.OperationalError:
         pass
+
+
+def get_priority_flags(members):
+    """Return a list of human-readable reasons a household should be
+    prioritized (senior citizen / pregnant / PWD members present)."""
+    reasons = []
+    for m in members:
+        vuln = (m["vulnerability"] or "").strip()
+        if not vuln or vuln.lower() == "none":
+            continue
+        low = vuln.lower()
+        if any(k in low for k in PRIORITY_KEYWORDS):
+            reasons.append(f"{m['full_name']} ({vuln})")
+    return reasons
+
+
+def get_relief_history(conn, resident_id):
+    rows = conn.execute("""
+        SELECT batch_number, claim_time, location
+        FROM relief_claims
+        WHERE resident_id=?
+        ORDER BY claim_time DESC
+    """, (resident_id,)).fetchall()
+    return [dict(r) for r in rows]
 
 
 def init_db():
@@ -128,6 +156,7 @@ def init_db():
     add_column(conn,"inventory_additions","weight_kg","REAL DEFAULT 0")
     add_column(conn,"inventory_additions","volume_liters","REAL DEFAULT 0")
     add_column(conn,"inventory_additions","volume_ml","REAL DEFAULT 0")
+    add_column(conn,"relief_claims","location","TEXT")
 
     settings = conn.execute("SELECT COUNT(*) FROM system_settings").fetchone()[0]
 
@@ -152,6 +181,159 @@ def init_db():
     conn.close()
 
 init_db()
+
+from reports import register_report_routes
+register_report_routes(app, get_db_connection)
+
+from resident_reports import register_resident_report_routes
+register_resident_report_routes(app, get_db_connection)
+
+from volunteers import register_volunteer_features
+register_volunteer_features(app, get_db_connection)
+
+# ======================================================
+# PASTE INTO app.py
+# ======================================================
+# 1) Next to the existing reports registration (after init_db()):
+#
+#        from reports import register_report_routes
+#        register_report_routes(app, get_db_connection)
+#
+#        from resident_reports import register_resident_report_routes   # <-- add
+#        register_resident_report_routes(app, get_db_connection)        # <-- add
+#
+# 2) Paste everything below into app.py (anywhere after `app` exists).
+# 3) Copy hazard_map.html into templates/ and hazard_zones.json next to app.py.
+# ======================================================
+
+HAZARD_FILE = os.path.join(BASE_DIR, "hazard_zones.json")
+
+
+def _is_admin_session():
+    rid = (session.get("resident_id") or "").lower()
+    role = (session.get("role") or "").lower()
+    return rid == "admin" or role == "admin"
+
+
+@app.route("/hazard-map")
+def hazard_map_page():
+    return render_template("hazard_map.html")
+
+
+@app.route("/api/hazard-zones", methods=["GET"])
+def get_hazard_zones():
+    """Hazard geometry for the evacuation map. Readable by everyone —
+    residents need it during an alert."""
+    try:
+        with open(HAZARD_FILE, "r", encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"status": "error",
+                        "message": "hazard_zones.json not found beside app.py"}), 404
+    except json.JSONDecodeError as e:
+        return jsonify({"status": "error",
+                        "message": f"hazard_zones.json is not valid JSON: {e}"}), 500
+
+
+@app.route("/api/hazard-zones", methods=["POST"])
+def save_hazard_zones():
+    """Admins trace zones on the map and save them here. The previous file is
+    kept as hazard_zones.backup.json so a bad trace can be rolled back."""
+    if not _is_admin_session():
+        return jsonify({"status": "error", "message": "Admin access only."}), 403
+
+    data = request.get_json() or {}
+    if "barangay" not in data or "evacuation_centers" not in data:
+        return jsonify({"status": "error",
+                        "message": "Hazard file must keep 'barangay' and 'evacuation_centers'."}), 400
+
+    try:
+        if os.path.exists(HAZARD_FILE):
+            with open(HAZARD_FILE, "r", encoding="utf-8") as f:
+                old = f.read()
+            with open(HAZARD_FILE + ".backup", "w", encoding="utf-8") as f:
+                f.write(old)
+
+        with open(HAZARD_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        conn = get_db_connection()
+        conn.execute("""
+            INSERT INTO transaction_log (time, actor, action, details)
+            VALUES (datetime('now', '+8 hours'), 'ADMIN', 'HAZARD MAP UPDATED', ?)
+        """, (f"Hazard zones saved: "
+              f"{len(data.get('lahar_corridors', []))} lahar corridors, "
+              f"{len(data.get('flood_zones', []))} flood zones, "
+              f"{len(data.get('routes', []))} routes",))
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "success", "message": "Hazard zones saved."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/hazard-zones/check", methods=["POST"])
+def check_hazard_point():
+    """Ask the server whether a coordinate sits inside a mapped hazard zone.
+    Used by the resident app so a phone can warn without loading the whole map."""
+    data = request.get_json() or {}
+    try:
+        lat, lon = float(data.get("lat")), float(data.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "lat and lon required"}), 400
+
+    try:
+        with open(HAZARD_FILE, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        return jsonify({"status": "success", "in_hazard": False, "zones": []})
+
+    import math
+
+    def haversine_m(a, b):
+        R = 6371000.0
+        p1, p2 = math.radians(a[0]), math.radians(b[0])
+        dp = math.radians(b[0] - a[0])
+        dl = math.radians(b[1] - a[1])
+        h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return 2 * R * math.asin(math.sqrt(h))
+
+    def point_in_poly(p, poly):
+        inside = False
+        j = len(poly) - 1
+        for i in range(len(poly)):
+            yi, xi = poly[i][0], poly[i][1]
+            yj, xj = poly[j][0], poly[j][1]
+            if (xi > p[1]) != (xj > p[1]) and \
+               p[0] < (yj - yi) * (p[1] - xi) / (xj - xi) + yi:
+                inside = not inside
+            j = i
+        return inside
+
+    point = [lat, lon]
+    hits = []
+
+    volcano = cfg.get("volcano") or {}
+    summit = volcano.get("summit")
+    if summit:
+        d = haversine_m(point, summit)
+        for z in volcano.get("zones", []):
+            if d <= z.get("radius_km", 0) * 1000:
+                hits.append(z.get("label", "Danger zone"))
+
+    for f in cfg.get("flood_zones", []):
+        if point_in_poly(point, f.get("polygon", [])):
+            hits.append(f.get("name", "Flood zone"))
+
+    # Lahar corridors are stored as centrelines; treat "within half the
+    # corridor width of any segment vertex" as inside.
+    for c in cfg.get("lahar_corridors", []):
+        half = (c.get("width_m", 200)) / 2.0
+        if any(haversine_m(point, v) <= half for v in c.get("centerline", [])):
+            hits.append(c.get("name", "Lahar corridor"))
+
+    return jsonify({"status": "success", "in_hazard": bool(hits), "zones": hits})
 
 # ==========================================
 # FRONTEND ROUTES
@@ -346,6 +528,8 @@ def resident_current():
         resident = conn.execute("SELECT * FROM residents WHERE id=?", (rid,)).fetchone()
 
     members = conn.execute("SELECT * FROM family_members WHERE resident_id=?", (resident["id"],)).fetchall()
+    priority_flags = get_priority_flags(members)
+    relief_history = get_relief_history(conn, resident["id"])
     conn.close()
 
     return jsonify({
@@ -356,7 +540,11 @@ def resident_current():
             "purok": resident["purok"],
             "mobile": resident["mobile"],
             "role": resident["role"],
-            "members": [dict(x) for x in members]
+            "members": [dict(x) for x in members],
+            "family_size": len(members),
+            "is_priority": len(priority_flags) > 0,
+            "priority_flags": priority_flags,
+            "relief_history": relief_history
         }
     })
 
@@ -378,6 +566,8 @@ def resident_profile(rid):
         "SELECT * FROM family_members WHERE resident_id=?",
         (rid,)
     ).fetchall()
+    priority_flags = get_priority_flags(members)
+    relief_history = get_relief_history(conn, resident["id"])
     conn.close()
 
     return jsonify({
@@ -388,7 +578,11 @@ def resident_profile(rid):
             "purok":resident["purok"],
             "mobile":resident["mobile"],
             "role":resident["role"],
-            "members":[dict(x) for x in members]
+            "members":[dict(x) for x in members],
+            "family_size": len(members),
+            "is_priority": len(priority_flags) > 0,
+            "priority_flags": priority_flags,
+            "relief_history": relief_history
         }
     })
 
@@ -626,7 +820,10 @@ def api_distribute_bundle():
         item_details_desc.append(f"{req_qty} {unit} of {name}")
 
     bundle_str = ", ".join(item_details_desc)
-    conn.execute("INSERT INTO relief_claims (resident_id, batch_number, claim_time) VALUES (?, ?, datetime('now', '+8 hours'))", (resident_id, current_batch))
+    conn.execute(
+        "INSERT INTO relief_claims (resident_id, batch_number, claim_time, location) VALUES (?, ?, datetime('now', '+8 hours'), ?)",
+        (resident_id, current_batch, location)
+    )
     conn.execute("""
         INSERT INTO transaction_log (time, actor, action, details)
         VALUES (datetime('now', '+8 hours'), ?, 'RELIEF DISTRIBUTED', ?)
@@ -672,7 +869,7 @@ def delete_log_entry(log_id):
     return jsonify({"status": "success"})
 
 # ==========================================
-# START NEW RELIEF BATCH
+# START NEW RELIEF BATCH / RESET BATCH
 # ==========================================
 
 @app.route("/api/inventory/new-batch",methods=["POST"])
@@ -686,6 +883,14 @@ def new_batch():
     current+=1
 
     conn.execute("UPDATE system_settings SET current_relief_batch=? WHERE id=1", (current,))
+
+    conn.execute("""
+    INSERT INTO transaction_log
+    (time, actor, action, details)
+    VALUES (datetime('now', '+8 hours'), 'ADMIN', 'BATCH RESET', ?)
+    """,
+    (f"Started new relief batch: now on Batch #{current}",))
+
     conn.commit()
     conn.close()
 
@@ -693,6 +898,28 @@ def new_batch():
         "status":"success",
         "message": f"Successfully switched to Batch #{current}",
         "batch":current
+    })
+
+@app.route("/api/inventory/reset-batch", methods=["POST"])
+def reset_batch_to_one():
+    conn = get_db_connection()
+
+    conn.execute("UPDATE system_settings SET current_relief_batch=1 WHERE id=1")
+
+    conn.execute("""
+    INSERT INTO transaction_log
+    (time, actor, action, details)
+    VALUES (datetime('now', '+8 hours'), 'ADMIN', 'BATCH RESET', ?)
+    """,
+    ("Batch counter manually reset back to Batch #1",))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "message": "Batch counter reset back to Batch #1.",
+        "batch": 1
     })
 
 # ==========================================
@@ -738,13 +965,14 @@ def scan_evac_qr():
     })
 
 # ==========================================
-# QR RELIEF DISTRIBUTION
+# QR RELIEF DISTRIBUTION (legacy single-item)
 # ==========================================
 
 @app.route("/api/scan-qr",methods=["POST"])
 def scan_qr():
     data=request.get_json() or {}
     resident_id=data.get("resident_id")
+    location=data.get("location", "Central Depot (Barangay Hall)")
 
     conn=get_db_connection()
     resident=conn.execute("SELECT * FROM residents WHERE id=?", (resident_id,)).fetchone()
@@ -775,16 +1003,16 @@ def scan_qr():
         }),400
 
     conn.execute("""
-    INSERT INTO relief_claims (resident_id, batch_number, claim_time)
-    VALUES (?, ?, datetime('now', '+8 hours'))
+    INSERT INTO relief_claims (resident_id, batch_number, claim_time, location)
+    VALUES (?, ?, datetime('now', '+8 hours'), ?)
     """,
-    (resident_id, current_batch))
+    (resident_id, current_batch, location))
 
     conn.execute("""
     INSERT INTO transaction_log (time, actor, action, details)
     VALUES (datetime('now', '+8 hours'), ?, 'RELIEF DISTRIBUTED', ?)
     """,
-    (resident_id, f"Distributed relief to {resident['head_name']}"))
+    (resident_id, f"Distributed relief to {resident['head_name']} at {location}"))
 
     conn.commit()
     conn.close()
@@ -796,7 +1024,7 @@ def scan_qr():
     })
 
 # ==========================================
-# OFFLINE SYNC ENDPOINT (NEW)
+# OFFLINE SYNC ENDPOINT
 # ==========================================
 
 @app.route("/api/sync-offline-claims", methods=["POST"])
@@ -821,9 +1049,10 @@ def sync_offline_claims():
             ).fetchone()
 
             if not claimed:
+                location = claim.get("location", "Central Depot (Barangay Hall)")
                 conn.execute(
-                    "INSERT INTO relief_claims (resident_id, batch_number, claim_time) VALUES (?, ?, datetime('now', '+8 hours'))",
-                    (resident_id, current_batch)
+                    "INSERT INTO relief_claims (resident_id, batch_number, claim_time, location) VALUES (?, ?, datetime('now', '+8 hours'), ?)",
+                    (resident_id, current_batch, location)
                 )
                 resident = conn.execute("SELECT head_name FROM residents WHERE id=?", (resident_id,)).fetchone()
                 head_name = resident["head_name"] if resident else resident_id
@@ -916,8 +1145,7 @@ def dashboard_analytics():
         "vulnerable": vulnerable,
         "missing": 0,
         "centers": [
-            {"name": "Boñga Elementary School", "current_occupancy": school_count, "capacity": 500},
-            {"name": "Boñga Barangay Hall", "current_occupancy": hall_count, "capacity": 200}
+            {"name": "Gogon High School", "current_occupancy": school_count, "capacity": 500},
         ],
         "logs": [dict(x) for x in logs]
     })

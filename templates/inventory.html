@@ -21,11 +21,40 @@
             <h3 class="text-white font-bold text-lg">Distribution Session Management</h3>
             <p class="text-indigo-200 text-sm">Anti-Double Claiming is active. Currently tracking claims for: <span class="font-bold text-yellow-400 text-lg ml-2" id="activeBatchDisplay">Batch #1</span></p>
         </div>
-        <button onclick="startNewBatch()" id="batchBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg flex items-center space-x-2">
-            <i class="fas fa-sync-alt"></i>
-            <span>Start New Batch (Reset Claims)</span>
-        </button>
+        {% if is_admin %}
+        <div class="flex flex-wrap items-center gap-2">
+            <button onclick="startNewBatch()" id="batchBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg flex items-center space-x-2">
+                <i class="fas fa-sync-alt"></i>
+                <span>Start New Batch (Reset Claims)</span>
+            </button>
+            <button onclick="resetBatchToOne()" id="resetBatchBtn" class="bg-slate-700 hover:bg-slate-600 border border-slate-500 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg flex items-center space-x-2">
+                <i class="fas fa-undo"></i>
+                <span>Reset Batch to #1</span>
+            </button>
+        </div>
+        {% endif %}
     </div>
+
+    {% if is_admin %}
+    <div class="bg-slate-900/60 border border-slate-700/50 rounded-lg p-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
+        <div>
+            <h3 class="text-white font-bold text-lg"><i class="fas fa-file-export text-emerald-400 mr-2"></i>Download Reports</h3>
+            <p class="text-gray-400 text-sm">Stock, restocks and relief claims. The batch choice applies to the claims list.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <select id="reportScope" class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="all">All batches</option>
+                <option value="current">Current batch</option>
+            </select>
+            <button onclick="downloadReport('xlsx')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-sm shadow transition flex items-center">
+                <i class="fas fa-file-excel mr-2"></i>Excel
+            </button>
+            <button onclick="downloadReport('pdf')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-lg text-sm shadow transition flex items-center">
+                <i class="fas fa-file-pdf mr-2"></i>PDF
+            </button>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl border-l-4 border-green-500">
@@ -59,12 +88,13 @@
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-semibold text-gray-300 mb-1">Item Category</label>
-                    <select id="addItemCategory" onchange="toggleOtherInput()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <select id="addItemCategory" onchange="updateAddFormFields()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                         <option value="Family Food Packs">Family Food Packs</option>
                         <option value="Sacks of Rice">Sacks of Rice</option>
                         <option value="Water Bottles">Water Bottles</option>
                         <option value="Others">Others (Specify)</option>
                     </select>
+                    <p id="categoryHint" class="text-[11px] text-gray-500 mt-1"></p>
                 </div>
                 <div id="otherItemContainer" class="hidden">
                     <label class="block text-sm font-semibold text-gray-300 mb-1">Specify Custom Item Name</label>
@@ -72,12 +102,12 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-300 mb-1" id="qtyLabel">Number of Containers</label>
-                        <input type="number" id="addQuantity" min="1" placeholder="e.g., 5 boxes" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <label class="block text-sm font-semibold text-gray-300 mb-1" id="qtyLabel">Number of Packs</label>
+                        <input type="number" id="addQuantity" min="1" placeholder="e.g., 5" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                     </div>
-                    <div>
+                    <div id="unitFieldWrap">
                         <label class="block text-sm font-semibold text-gray-300 mb-1">Base Unit</label>
-                        <select id="addUnit" onchange="updateUnitFields()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <select id="addUnit" onchange="updateUnitLabelOnly()" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="pcs">Pieces / Packs</option>
                             <option value="kg">Kilograms (kg)</option>
                             <option value="L">Liters (L)</option>
@@ -86,12 +116,12 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3" id="containerBreakdownFields">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-300 mb-1">Items per Container</label>
+                    <div id="itemsPerContainerWrap">
+                        <label class="block text-sm font-semibold text-gray-300 mb-1" id="itemsPerContainerLabel">Items per Container</label>
                         <input type="number" id="addItemsPerContainer" min="1" value="1" placeholder="e.g., 24 bottles/box" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-300 mb-1">Size per Item (ml/L/kg)</label>
+                    <div id="containerSizeWrap">
+                        <label class="block text-sm font-semibold text-gray-300 mb-1" id="containerSizeLabel">Size per Item (ml/L/kg)</label>
                         <input type="number" id="addContainerSize" step="0.1" min="0" placeholder="e.g., 500 for 500ml" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                     </div>
                 </div>
@@ -111,11 +141,11 @@
             </div>
         </div>
 
-        <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl flex flex-col">
-            <h2 class="text-lg font-bold text-white mb-1"><i class="fas fa-qrcode text-cyan-400 mr-2"></i>Multi-Item QR Dispatch</h2>
-            <p class="text-xs text-gray-400 mb-3">Configure bundle items from inventory stock, then scan resident QR.</p>
+        <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl lg:col-span-2">
+            <h2 class="text-lg font-bold text-white mb-1"><i class="fas fa-hand-holding-heart text-blue-400 mr-2"></i>Relief Dispatch</h2>
+            <p class="text-xs text-gray-400 mb-4">Configure the location and bundle once below, then dispatch it either by scanning the resident's QR code or by entering their Household ID manually. Both methods use the same configuration.</p>
 
-            <div class="space-y-3 mb-4 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <div class="space-y-3 mb-5 bg-slate-950 p-4 rounded-xl border border-slate-800">
                 <div>
                     <label class="block text-[10px] uppercase font-bold text-gray-400 mb-1">Issuing Location</label>
                     <select id="distributeLocation" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white">
@@ -152,24 +182,29 @@
                 </div>
             </div>
 
-            <div class="flex-grow flex flex-col justify-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden relative min-h-[160px]">
-                <div id="reader" style="width: 100%; border: none;"></div>
-            </div>
-            <p id="scanFeedback" class="text-center text-sm font-bold mt-3 hidden p-2 rounded-lg"></p>
-        </div>
-
-        <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl">
-            <h2 class="text-lg font-bold text-white mb-1"><i class="fas fa-hand-holding-heart text-blue-400 mr-2"></i>Manual Bundle Distribution</h2>
-            <p class="text-xs text-gray-400 mb-5">Log multi-item distribution manually if QR scan fails.</p>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold text-gray-300 mb-1">Household ID</label>
-                    <input type="text" id="manualDistId" placeholder="e.g., BGN-90478" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white uppercase text-sm">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="border border-slate-800 rounded-xl p-4 bg-slate-900/40">
+                    <h3 class="text-sm font-bold text-cyan-300 mb-2"><i class="fas fa-qrcode mr-1"></i>Option A: Scan Resident QR</h3>
+                    <div class="flex flex-col justify-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden relative min-h-[160px]">
+                        <div id="reader" style="width: 100%; border: none;"></div>
+                    </div>
+                    <p id="scanFeedback" class="text-center text-sm font-bold mt-3 hidden p-2 rounded-lg"></p>
                 </div>
-                <button onclick="manualBundleDistribute()" id="manualDistBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition mt-2">
-                    Dispatch Bundle to Household
-                </button>
-                <p id="manualDistFeedback" class="text-center text-sm font-bold mt-2 hidden"></p>
+
+                <div class="border border-slate-800 rounded-xl p-4 bg-slate-900/40 flex flex-col">
+                    <h3 class="text-sm font-bold text-blue-300 mb-2"><i class="fas fa-keyboard mr-1"></i>Option B: Enter Household ID Manually</h3>
+                    <p class="text-[11px] text-gray-500 mb-3">Use this only if the QR scan fails or the resident has no QR code.</p>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-300 mb-1">Household ID</label>
+                            <input type="text" id="manualDistId" placeholder="e.g., BGN-90478" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white uppercase text-sm">
+                        </div>
+                        <button onclick="manualBundleDistribute()" id="manualDistBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
+                            Dispatch Bundle to Household
+                        </button>
+                        <p id="manualDistFeedback" class="text-center text-sm font-bold mt-2 hidden"></p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -213,6 +248,10 @@
                     <p class="mt-3 text-gray-500 font-semibold animate-pulse">Fetching records...</p>
                 </div>
                 <div id="qrContent" class="hidden">
+                    <div id="qrPriorityBanner" class="hidden mb-4 bg-red-50 border-2 border-red-400 text-red-700 rounded-xl p-3 text-center">
+                        <p class="font-black text-xs uppercase tracking-wider"><i class="fas fa-star mr-1"></i>Priority Household</p>
+                        <p id="qrPriorityReasons" class="text-[11px] mt-1 text-red-600"></p>
+                    </div>
                     <div class="mb-5 text-center">
                         <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Household Head</p>
                         <p id="qrHeadName" class="text-3xl font-black text-gray-900 mt-1"></p>
@@ -231,6 +270,10 @@
                         Family Roster (<span id="qrFamilySize"></span>)
                     </h3>
                     <ul id="qrRosterList" class="space-y-2 mt-2 mb-6"></ul>
+                    <h3 class="font-bold text-gray-700 text-sm mb-3 uppercase tracking-wide border-b-2 border-emerald-600 inline-block pb-1">
+                        Relief Claim History
+                    </h3>
+                    <ul id="qrHistoryList" class="space-y-2 mt-2 mb-4"></ul>
                     <button onclick="closeResidentProfileModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl transition shadow-lg mt-4 flex items-center justify-center space-x-2">
                         <i class="fas fa-check-circle text-green-400"></i>
                         <span>Done / Close Window</span>
@@ -244,6 +287,7 @@
 
 {% block extra_js %}
 <script>
+    const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
     let currentActiveTab = 'all';
     let allFetchedLogs = [];
 
@@ -292,17 +336,70 @@
         container.appendChild(div);
     }
 
-    function updateUnitFields() {
-        const unit = document.getElementById("addUnit").value;
+    // Category-driven form: picks the right base unit automatically and only
+    // shows the fields that are actually relevant to that category.
+    function updateAddFormFields() {
+        const cat = document.getElementById("addItemCategory").value;
+        const otherContainer = document.getElementById("otherItemContainer");
+        const unitWrap = document.getElementById("unitFieldWrap");
+        const unitSelect = document.getElementById("addUnit");
         const qtyLabel = document.getElementById("qtyLabel");
+        const itemsPerContainerWrap = document.getElementById("itemsPerContainerWrap");
+        const containerSizeWrap = document.getElementById("containerSizeWrap");
+        const itemsPerContainerLabel = document.getElementById("itemsPerContainerLabel");
+        const containerSizeLabel = document.getElementById("containerSizeLabel");
+        const itemsPerContainerInput = document.getElementById("addItemsPerContainer");
+        const containerSizeInput = document.getElementById("addContainerSize");
+        const hint = document.getElementById("categoryHint");
 
-        if (unit === "kg") {
-            qtyLabel.innerText = "Number of Sacks / Bags";
-        } else if (unit === "L" || unit === "ml") {
-            qtyLabel.innerText = "Number of Bottles / Containers";
+        otherContainer.classList.toggle("hidden", cat !== "Others");
+
+        if (cat === "Sacks of Rice") {
+            unitWrap.classList.add("hidden");
+            unitSelect.value = "kg";
+            qtyLabel.innerText = "Number of Sacks";
+            itemsPerContainerWrap.classList.add("hidden");
+            itemsPerContainerInput.value = "1";
+            containerSizeWrap.classList.remove("hidden");
+            containerSizeLabel.innerText = "Weight per Sack (kg)";
+            containerSizeInput.placeholder = "e.g., 25 for a 25kg sack";
+            hint.innerText = "Automatically tracked in kilograms (kg).";
+        } else if (cat === "Water Bottles") {
+            unitWrap.classList.add("hidden");
+            unitSelect.value = "ml";
+            qtyLabel.innerText = "Number of Bottles/Containers";
+            itemsPerContainerWrap.classList.add("hidden");
+            itemsPerContainerInput.value = "1";
+            containerSizeWrap.classList.remove("hidden");
+            containerSizeLabel.innerText = "Volume per Bottle (mL)";
+            containerSizeInput.placeholder = "e.g., 500 for a 500ml bottle";
+            hint.innerText = "Automatically tracked in liters (L) — enter the size per bottle in mL.";
+        } else if (cat === "Family Food Packs") {
+            unitWrap.classList.add("hidden");
+            unitSelect.value = "pcs";
+            qtyLabel.innerText = "Number of Packs";
+            itemsPerContainerWrap.classList.add("hidden");
+            containerSizeWrap.classList.add("hidden");
+            itemsPerContainerInput.value = "1";
+            containerSizeInput.value = "";
+            hint.innerText = "Automatically tracked in pieces/packs (pcs).";
         } else {
-            qtyLabel.innerText = "Quantity (Pieces)";
+            unitWrap.classList.remove("hidden");
+            qtyLabel.innerText = "Number of Containers";
+            itemsPerContainerWrap.classList.remove("hidden");
+            containerSizeWrap.classList.remove("hidden");
+            itemsPerContainerLabel.innerText = "Items per Container";
+            containerSizeLabel.innerText = "Size per Item (ml/L/kg)";
+            containerSizeInput.placeholder = "e.g., 500 for 500ml";
+            hint.innerText = "Choose the base unit and, if useful, how each container breaks down.";
         }
+    }
+
+    function updateUnitLabelOnly() {
+        // Kept for the "Others" category where the admin still picks the unit manually.
+        const unit = document.getElementById("addUnit").value;
+        const containerSizeLabel = document.getElementById("containerSizeLabel");
+        if (containerSizeLabel) containerSizeLabel.innerText = `Size per Item (${unit})`;
     }
 
     function renderLogsTable() {
@@ -327,10 +424,10 @@
                 <td class="px-4 py-3 text-gray-300"><span class="${colorClass} font-bold text-xs uppercase">${log.action}</span><br><span class="text-[12px]">${log.details}</span></td>
                 <td class="px-4 py-3 text-gray-500 text-xs">${log.actor || 'ADMIN'}</td>
                 <td class="px-4 py-3 text-right">
-                    <div class="flex justify-end items-center space-x-3">
+                    ${IS_ADMIN ? `<div class="flex justify-end items-center space-x-3">
                         <button onclick="editLog('${log.id}')" class="text-indigo-400 hover:text-indigo-300 text-xs font-bold transition"><i class="fas fa-edit"></i> Edit</button>
                         <button onclick="deleteLog('${log.id}')" class="text-red-500 hover:text-red-400 text-xs font-bold transition"><i class="fas fa-trash"></i> Delete</button>
-                    </div>
+                    </div>` : ''}
                 </td>
             </tr>`;
         }).join("");
@@ -377,6 +474,7 @@
 
     async function startNewBatch() {
         const btn = document.getElementById("batchBtn");
+        if(!btn) return;
         if(!confirm("Start a new Relief Batch? This allows all residents to claim relief again.")) return;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span> Starting...</span>';
@@ -391,6 +489,24 @@
         btn.innerHTML = '<i class="fas fa-sync-alt"></i><span> Start New Batch (Reset Claims)</span>';
     }
 
+    async function resetBatchToOne() {
+        const btn = document.getElementById("resetBatchBtn");
+        if(!btn) return;
+        if(!confirm("Reset the batch counter back to Batch #1? Do this only if the batch number was advanced by mistake or you are starting a brand new relief operation.")) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span> Resetting...</span>';
+
+        try {
+            let res = await fetch('/api/inventory/reset-batch', { method: 'POST' });
+            let data = await res.json();
+            if(data.status === "success") { alert(data.message); loadInventoryData(); }
+            else alert(data.message || "Error resetting batch.");
+        } catch(e) { alert("Error connecting to server."); }
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-undo"></i><span> Reset Batch to #1</span>';
+    }
+
     async function addStock() {
         const qty = document.getElementById("addQuantity").value;
         const unit = document.getElementById("addUnit").value;
@@ -403,7 +519,7 @@
         const feedback = document.getElementById("addFeedback");
 
         if(!qty || qty <= 0) {
-            feedback.innerText = "Please enter a valid container count.";
+            feedback.innerText = "Please enter a valid quantity.";
             feedback.className = "text-center text-sm font-bold mt-2 text-red-400";
             feedback.classList.remove("hidden");
             return;
@@ -444,16 +560,9 @@
             feedback.className = "text-center text-sm font-bold mt-2 text-red-400";
         }
 
-        feedback.classList.add("hidden");
+        feedback.classList.remove("hidden");
         btn.disabled = false; btn.innerText = "Add Stock to Inventory";
         setTimeout(() => feedback.classList.add("hidden"), 4000);
-    }
-
-    function toggleOtherInput() {
-        const type = document.getElementById("addItemCategory").value;
-        const container = document.getElementById("otherItemContainer");
-        if (type === "Others") container.classList.remove("hidden");
-        else container.classList.add("hidden");
     }
 
     function searchLogs() {
@@ -524,6 +633,14 @@
                 document.getElementById('qrPurok').innerText = data.resident.purok;
                 document.getElementById('qrFamilySize').innerText = data.resident.family_size;
 
+                const banner = document.getElementById('qrPriorityBanner');
+                if (data.resident.is_priority) {
+                    document.getElementById('qrPriorityReasons').innerText = (data.resident.priority_flags || []).join(", ");
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                }
+
                 const rosterList = document.getElementById('qrRosterList');
                 rosterList.innerHTML = "";
 
@@ -550,6 +667,24 @@
                         </li>
                     `;
                 });
+
+                const historyList = document.getElementById('qrHistoryList');
+                historyList.innerHTML = "";
+                const history = data.resident.relief_history || [];
+                if (history.length === 0) {
+                    historyList.innerHTML = `<li class="text-xs text-gray-400 italic">No relief claimed yet.</li>`;
+                } else {
+                    history.forEach(h => {
+                        historyList.innerHTML += `
+                            <li class="bg-emerald-50 p-3 rounded-lg border border-emerald-200 flex justify-between items-center shadow-sm">
+                                <div>
+                                    <p class="font-bold text-gray-800 text-xs">Batch #${h.batch_number} • ${h.location || 'Unknown location'}</p>
+                                    <p class="text-[11px] text-gray-500 mt-0.5">${h.claim_time}</p>
+                                </div>
+                            </li>
+                        `;
+                    });
+                }
 
                 loading.classList.add('hidden');
                 content.classList.remove('hidden');
@@ -578,14 +713,7 @@
         processQRScan(decodedText);
     }
 
-    async function processQRScan(decodedText) {
-        let residentId = decodedText;
-        try {
-            let qrData = JSON.parse(decodedText);
-            if (qrData && qrData.id) residentId = qrData.id;
-        } catch (e) { residentId = decodedText; }
-
-        const location = document.getElementById("distributeLocation").value;
+    function collectBundleItems() {
         const items = [];
         document.querySelectorAll(".bundle-row").forEach(row => {
             let selectVal = row.querySelector(".bundle-select").value;
@@ -595,6 +723,18 @@
             let unit = row.querySelector(".bundle-unit").value;
             if (name && qty > 0) items.push({ item_name: name, quantity: qty, unit: unit });
         });
+        return items;
+    }
+
+    async function processQRScan(decodedText) {
+        let residentId = decodedText;
+        try {
+            let qrData = JSON.parse(decodedText);
+            if (qrData && qrData.id) residentId = qrData.id;
+        } catch (e) { residentId = decodedText; }
+
+        const location = document.getElementById("distributeLocation").value;
+        const items = collectBundleItems();
 
         const feedback = document.getElementById("scanFeedback");
         feedback.classList.remove("hidden");
@@ -628,23 +768,28 @@
         }
     }
 
+    function downloadReport(fmt) {
+        const scopeEl = document.getElementById('reportScope');
+        if (!scopeEl) return;
+        const scope = scopeEl.value;
+        window.location.href = `/api/reports/inventory.${fmt}?batch=${encodeURIComponent(scope)}`;
+    }
+
     async function manualBundleDistribute() {
         const id = document.getElementById("manualDistId").value.trim();
         const location = document.getElementById("distributeLocation").value;
         const feedback = document.getElementById("manualDistFeedback");
 
-        const items = [];
-        document.querySelectorAll(".bundle-row").forEach(row => {
-            let selectVal = row.querySelector(".bundle-select").value;
-            let customVal = row.querySelector(".bundle-other-input") ? row.querySelector(".bundle-other-input").value : "";
-            let name = (selectVal === "Others" && customVal.trim()) ? customVal.trim() : selectVal;
-            let qty = parseFloat(row.querySelector(".bundle-qty").value) || 0;
-            let unit = row.querySelector(".bundle-unit").value;
-            if (name && qty > 0) items.push({ item_name: name, quantity: qty, unit: unit });
-        });
+        const items = collectBundleItems();
 
         if(!id) {
             feedback.innerText = "Please enter Household ID.";
+            feedback.className = "text-center text-sm font-bold mt-2 text-red-400";
+            feedback.classList.remove("hidden");
+            return;
+        }
+        if(items.length === 0) {
+            feedback.innerText = "Please configure at least one bundle item above.";
             feedback.className = "text-center text-sm font-bold mt-2 text-red-400";
             feedback.classList.remove("hidden");
             return;
@@ -659,10 +804,11 @@
             let data = await res.json();
 
             if(data.status === "success") {
-                feedback.innerText = "Manual bundle distribution logged!";
+                feedback.innerText = `Manual bundle distributed to ${data.head_name || id}!`;
                 feedback.className = "text-center text-sm font-bold mt-2 text-blue-400";
                 document.getElementById("manualDistId").value = "";
                 loadInventoryData();
+                await showResidentProfileModal(id);
             } else {
                 feedback.innerText = data.message;
                 feedback.className = "text-center text-sm font-bold mt-2 text-red-400";
@@ -671,12 +817,15 @@
             feedback.innerText = "Error connecting to server.";
             feedback.className = "text-center text-sm font-bold mt-2 text-red-400";
         }
-        feedback.classList.add("hidden");
+        feedback.classList.remove("hidden");
         setTimeout(() => feedback.classList.add("hidden"), 4000);
     }
 
     html5QrcodeScanner.render(onScanSuccess);
-    window.onload = loadInventoryData;
+    window.onload = function() {
+        updateAddFormFields();
+        loadInventoryData();
+    };
     setInterval(loadInventoryData, 10000);
 </script>
 

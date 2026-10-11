@@ -7,25 +7,32 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <main class="container mx-auto px-6 py-8 flex-grow relative z-10">
-    <div class="flex items-center space-x-3 mb-6 border-b border-slate-700 pb-4">
+    <div class="flex items-center space-x-4 mb-6 border-b border-slate-700 pb-4">
         <i class="fas fa-id-card text-3xl text-cyan-400"></i>
         <div>
             <h1 class="text-3xl font-bold text-white tracking-wide">Resident & Evacuee Registration</h1>
-            <p class="text-gray-400 text-sm mt-1">Register households, check-in evacuees, or update resident profiles.</p>
+            <p class="text-gray-400 text-sm mt-2">Register households, check-in evacuees, or update resident profiles.</p>
         </div>
     </div>
 
     <!-- TABS -->
-    <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4 mb-8">
-        <button type="button" onclick="switchTab('register')" id="tabRegister" class="px-6 py-3 rounded-xl font-bold text-sm bg-cyan-600 text-white shadow-lg transition">
+    <div class="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center gap-3 md:gap-4 mb-8">
+        <button type="button" onclick="switchTab('register')" id="tabRegister" class="px-7 py-3.5 rounded-xl font-bold text-sm bg-cyan-600 text-white shadow-lg transition">
             <i class="fas fa-user-plus mr-2"></i> Household Registration
         </button>
-        <button type="button" onclick="switchTab('checkin')" id="tabCheckin" class="px-6 py-3 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition">
+        <button type="button" onclick="switchTab('checkin')" id="tabCheckin" class="px-7 py-3.5 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition">
             <i class="fas fa-qrcode mr-2"></i> Evacuee Arrival Scanner
         </button>
-        <button type="button" onclick="switchTab('editprofile')" id="tabEditProfile" class="px-6 py-3 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition" onclick="loadAllResidentsDirectory()">
-            <i class="fas fa-users-cog mr-2"></i> Resident Directory & Roster Editor
-        </button>
+        <!-- Admin-only tabs. Kept in the DOM (hidden for volunteers) because switchTab() expects them. -->
+        <div class="contents" {% if not is_admin %}style="display:none"{% endif %}>
+            <button type="button" onclick="switchTab('editprofile')" id="tabEditProfile" class="px-7 py-3.5 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition">
+                <i class="fas fa-users-cog mr-2"></i> Resident Directory & Roster Editor
+            </button>
+            <button type="button" onclick="switchTab('reports')" id="tabReports" class="px-7 py-3.5 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition">
+                <i class="fas fa-file-lines mr-2"></i> Registration Reports
+            </button>
+        </div>
+        </div>
     </div>
 
     <!-- SECTION 1: REGISTER -->
@@ -103,8 +110,7 @@
         <div>
             <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Designated Evacuation Shelter</label>
             <select id="checkinCenter" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
-                <option value="Boñga Elementary School Covered Court">Boñga Elementary School Covered Court</option>
-                <option value="Boñga Barangay Hall Evacuation Shelter">Boñga Barangay Hall Evacuation Shelter</option>
+                <option value="Gogon High School">Gogon High School</option>
             </select>
         </div>
         <div class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden relative">
@@ -145,6 +151,75 @@
         </div>
     </div>
 
+    <!-- SECTION 4: REGISTRATION REPORTS -->
+    <div id="sectionReports" class="hidden max-w-5xl mx-auto space-y-6">
+
+        <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl space-y-5">
+            <div class="border-b border-slate-800 pb-3">
+                <h2 class="text-xl font-bold text-white"><i class="fas fa-file-lines text-cyan-400 mr-2"></i> Registration Reports</h2>
+                <p class="text-gray-400 text-xs mt-1">Who is registered, which purok they belong to, who is vulnerable, and where each household is right now.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Purok</label>
+                    <select id="repPurok" onchange="loadReportPreview()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+                        <option value="all">All puroks</option>
+                        <option>Purok 1A</option><option>Purok 1B</option><option>Purok 2</option><option>Purok 3</option>
+                        <option>Purok 4</option><option>Purok 5</option><option>Purok 6A</option><option>Purok 6B</option>
+                        <option>Purok 7A</option><option>Purok 7B</option><option>Purok 8A</option><option>Purok 8B</option>
+                        <option>Purok 9A</option><option>Purok 9B</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Household status</label>
+                    <select id="repStatus" onchange="loadReportPreview()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+                        <option value="all">Everyone</option>
+                        <option value="evacuated">Households with evacuated members</option>
+                        <option value="home">Households still at home</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button type="button" onclick="loadReportPreview()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-bold text-white transition">
+                        <i class="fas fa-rotate mr-1"></i> Refresh figures
+                    </button>
+                </div>
+            </div>
+
+            <div id="repStats" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+
+            <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+                <button type="button" onclick="downloadReport('xlsx')" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold text-white transition shadow">
+                    <i class="fas fa-file-excel mr-2"></i>Excel workbook
+                </button>
+                <button type="button" onclick="downloadReport('pdf')" class="px-4 py-2.5 bg-red-700 hover:bg-red-600 rounded-xl text-sm font-bold text-white transition shadow">
+                    <i class="fas fa-file-pdf mr-2"></i>PDF for CDRRMO
+                </button>
+                <button type="button" onclick="downloadReport('csv')" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl text-sm font-bold text-white transition">
+                    <i class="fas fa-file-csv mr-2"></i>CSV
+                </button>
+            </div>
+            <p class="text-[11px] text-gray-500">Downloads need an admin session. Each file covers the filters above and lists every household, every individual, and the purok, age and vulnerability breakdowns.</p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl">
+            <h3 class="text-sm font-bold text-white mb-3">Registration by purok</h3>
+            <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+                <div class="max-h-[380px] overflow-y-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-900 text-gray-400 uppercase text-[10px] sticky top-0 border-b border-slate-800">
+                            <tr>
+                                <th class="p-3">Purok</th><th class="p-3">Households</th><th class="p-3">People</th>
+                                <th class="p-3">Evacuated</th><th class="p-3">At home</th><th class="p-3">Vulnerable</th><th class="p-3">Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody id="repPurokBody" class="divide-y divide-slate-800 text-sm text-gray-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- EDIT / ROSTER MANAGEMENT MODAL -->
     <div id="rosterModal" class="fixed inset-0 bg-black/80 z-[9999] hidden flex items-center justify-center p-4 backdrop-blur-sm" onclick="closeRosterModal()">
         <div class="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl relative" onclick="event.stopPropagation()">
@@ -173,8 +248,11 @@
                         <span class="text-xs text-gray-400">Current PIN: <strong id="modalCurrentPin" class="text-emerald-400 font-mono text-base"></strong></span>
                     </div>
                     <div class="flex space-x-2">
-                        <input type="text" id="modalNewPin" placeholder="New PIN (4 digits)" maxlength="6" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="flex-grow bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-white outline-none">
-                        <button type="button" onclick="updateModalPin()" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded text-xs font-bold transition">Update PIN</button>
+                        <div class="relative flex-grow">
+    <input type="password" id="modalNewPin" placeholder="New PIN (4 digits)" maxlength="6" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="w-full bg-slate-800 border border-slate-700 rounded pl-3 pr-9 py-1.5 text-xs text-white outline-none">
+    <button type="button" onclick="togglePin('modalNewPin', this)" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-cyan-400 transition" title="Show or hide PIN" aria-label="Show or hide PIN" aria-pressed="false"><i class="fas fa-eye"></i></button>
+</div>
+<button type="button" onclick="updateModalPin()" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded text-xs font-bold transition">Update PIN</button>
                     </div>
                     <p id="modalPinFeedback" class="text-[11px] font-bold mt-1 hidden"></p>
                 </div>
@@ -280,13 +358,15 @@ function switchTab(tab) {
     document.getElementById("sectionRegister").classList.add("hidden");
     document.getElementById("sectionCheckin").classList.add("hidden");
     document.getElementById("sectionEditProfile").classList.add("hidden");
+    document.getElementById("sectionReports").classList.add("hidden");
 
-    const activeClass = "px-6 py-3 rounded-xl font-bold text-sm bg-cyan-600 text-white shadow-lg transition";
-    const inactiveClass = "px-6 py-3 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition";
-    
+    const activeClass = "px-7 py-3.5 rounded-xl font-bold text-sm bg-cyan-600 text-white shadow-lg transition";
+    const inactiveClass = "px-7 py-3.5 rounded-xl font-bold text-sm bg-slate-800 text-gray-400 hover:text-white transition";
+
     document.getElementById("tabRegister").className = inactiveClass;
     document.getElementById("tabCheckin").className = inactiveClass;
     document.getElementById("tabEditProfile").className = inactiveClass;
+    document.getElementById("tabReports").className = inactiveClass;
 
     if (tab === "register") {
         document.getElementById("sectionRegister").classList.remove("hidden");
@@ -299,6 +379,10 @@ function switchTab(tab) {
         document.getElementById("sectionEditProfile").classList.remove("hidden");
         document.getElementById("tabEditProfile").className = activeClass;
         loadAllResidentsDirectory();
+    } else if (tab === "reports") {
+        document.getElementById("sectionReports").classList.remove("hidden");
+        document.getElementById("tabReports").className = activeClass;
+        loadReportPreview();
     }
 }
 
@@ -537,6 +621,17 @@ async function deleteFamilyMember(memberId) {
     }
 }
 
+function togglePin(id, btn) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    const icon = btn ? btn.querySelector("i") : null;
+    if (icon) icon.className = reveal ? "fas fa-eye-slash" : "fas fa-eye";
+    if (btn) btn.setAttribute("aria-pressed", reveal ? "true" : "false");
+}
+
+
 async function updateModalPin() {
     const newPin = document.getElementById("modalNewPin").value.trim();
     const feedback = document.getElementById("modalPinFeedback");
@@ -603,6 +698,70 @@ function closeRosterModal() {
     document.getElementById("rosterModal").classList.add("hidden");
     activeEditingResidentId = null;
 }
+
+// -----------------------------------------------------
+// REGISTRATION REPORTS
+// -----------------------------------------------------
+function reportQuery() {
+    const purok = document.getElementById("repPurok").value;
+    const status = document.getElementById("repStatus").value;
+    return `?purok=${encodeURIComponent(purok)}&status=${encodeURIComponent(status)}`;
+}
+
+function downloadReport(ext) {
+    window.location = `/api/reports/residents.${ext}${reportQuery()}`;
+}
+
+async function loadReportPreview() {
+    const stats = document.getElementById("repStats");
+    const body = document.getElementById("repPurokBody");
+    stats.innerHTML = `<p class="col-span-4 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Counting households...</p>`;
+
+    try {
+        const res = await fetch(`/api/reports/residents/summary${reportQuery()}`);
+        if (res.status === 401 || res.status === 403) {
+            stats.innerHTML = `<p class="col-span-4 text-amber-400 text-sm">Sign in as admin to see and download registration reports.</p>`;
+            body.innerHTML = "";
+            return;
+        }
+        const d = await res.json();
+        const t = d.totals;
+
+        const card = (label, value, color) => `
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                <p class="text-[10px] text-gray-400 uppercase tracking-wider">${label}</p>
+                <p class="text-3xl font-black ${color} mt-1">${value}</p>
+            </div>`;
+
+        stats.innerHTML =
+            card("Households", t.households, "text-white") +
+            card("People registered", t.members, "text-white") +
+            card("Currently evacuated", t.evacuated, "text-cyan-400") +
+            card("Priority households", t.priority_households, "text-amber-400");
+
+        body.innerHTML = d.purok_stats.map(p => `
+            <tr class="hover:bg-slate-900/50 transition">
+                <td class="p-3 font-bold text-white">${p.purok}</td>
+                <td class="p-3">${p.households}</td>
+                <td class="p-3">${p.members}</td>
+                <td class="p-3 text-cyan-400">${p.evacuated}</td>
+                <td class="p-3">${p.at_home}</td>
+                <td class="p-3 text-amber-400">${p.vulnerable}</td>
+                <td class="p-3">${p.priority}</td>
+            </tr>`).join("") ||
+            `<tr><td colspan="7" class="text-center py-6 text-gray-400">No households match these filters.</td></tr>`;
+
+        if (t.no_mobile || t.no_roster) {
+            stats.insertAdjacentHTML("beforeend", `
+                <p class="col-span-2 md:col-span-4 text-[11px] text-amber-400/90">
+                    ${t.no_mobile} household(s) have no mobile number and won't receive SMS alerts;
+                    ${t.no_roster} have an empty family roster.
+                </p>`);
+        }
+    } catch (e) {
+        stats.innerHTML = `<p class="col-span-4 text-red-400 text-sm">Couldn't load the figures. Check that the server is running.</p>`;
+    }
+}
 // -----------------------------------------------------
 
 function extractResidentId(decodedText) {
@@ -623,7 +782,7 @@ async function showResidentProfileModal(scannedId) {
     const modal = document.getElementById('qrResultModal');
     const loading = document.getElementById('qrLoading');
     const content = document.getElementById('qrContent');
-    
+
     modal.classList.remove('hidden');
     loading.classList.remove('hidden');
     content.classList.add('hidden');
@@ -639,8 +798,8 @@ async function showResidentProfileModal(scannedId) {
             document.getElementById('qrFamilySize').innerText = data.resident.family_size;
 
             const rosterList = document.getElementById('qrRosterList');
-            rosterList.innerHTML = ""; 
-            
+            rosterList.innerHTML = "";
+
             data.resident.members.forEach(member => {
                 let isEvac = member.status && member.status.toUpperCase() === "EVACUATED";
                 let badgeColor = isEvac ? "bg-green-100 text-green-700 border-green-200" : "bg-yellow-100 text-yellow-700 border-yellow-200";
@@ -678,9 +837,9 @@ async function showResidentProfileModal(scannedId) {
 function initEvacScanner() {
     if (evacScannerInstance) return;
     try {
-        evacScannerInstance = new Html5QrcodeScanner("evacReader", { 
-            fps: 30, 
-            rememberLastUsedCamera: true, 
+        evacScannerInstance = new Html5QrcodeScanner("evacReader", {
+            fps: 30,
+            rememberLastUsedCamera: true,
             qrbox: function(viewfinderWidth, viewfinderHeight) {
                 let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
                 return { width: Math.floor(minEdgeSize * 0.80), height: Math.floor(minEdgeSize * 0.80) };
@@ -716,7 +875,7 @@ async function onEvacQRSuccess(decodedText, decodedResult) {
         });
         const data = await response.json();
         if (data.status !== "success") throw new Error(data.message || "Check-in failed");
-        
+
         feedback.className = "text-center p-3 rounded-lg font-bold text-sm bg-green-900/50 text-green-300 border border-green-500";
         feedback.innerText = `Arrival Confirmed!`;
         await showResidentProfileModal(residentId);

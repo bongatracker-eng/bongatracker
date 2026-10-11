@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evacuation Map - BoñgaTrack</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  #hazardMap { height: calc(100vh - 168px); min-height: 460px; width: 100%; }
+  @media (max-width: 1023px) { #hazardMap { height: 62vh; } }
+  .leaflet-container { background: #0f172a; font-family: inherit; }
+  .leaflet-popup-content-wrapper { background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:12px; }
+  .leaflet-popup-tip { background:#0f172a; border:1px solid #334155; }
+  .leaflet-popup-content { margin: 12px 14px; font-size: 13px; line-height: 1.45; }
+  .leaflet-bar a { background:#1e293b; color:#e2e8f0; border-bottom-color:#334155; }
+  .leaflet-bar a:hover { background:#334155; }
+  .leaflet-control-attribution { background: rgba(15,23,42,.85); color:#94a3b8; }
+  .leaflet-control-attribution a { color:#67e8f9; }
+  .pin { display:flex; align-items:center; justify-content:center; border-radius:50%; box-shadow:0 0 0 3px rgba(15,23,42,.9); font-size:12px; }
+  .pin-center { width:30px; height:30px; background:#0891b2; color:#fff; }
+  .pin-assembly { width:22px; height:22px; background:#f59e0b; color:#1c1917; font-size:10px; }
+  .pin-safe { width:16px; height:16px; background:#10b981; }
+  .pin-risk { width:16px; height:16px; background:#ef4444; animation: throb 1.6s ease-in-out infinite; }
+  .pin-me { width:20px; height:20px; background:#a855f7; color:#fff; }
+  @keyframes throb { 50% { box-shadow:0 0 0 7px rgba(239,68,68,.25); } }
+  @media (prefers-reduced-motion: reduce) { .pin-risk { animation:none; } }
+  .panel::-webkit-scrollbar { width:8px; } .panel::-webkit-scrollbar-thumb { background:#334155; border-radius:8px; }
+  :focus-visible { outline:2px solid #22d3ee; outline-offset:2px; }
+  .step-line { border-left:2px solid #155e75; }
+</style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+<nav class="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 flex justify-between items-center shadow-md">
+  <div class="flex items-center space-x-3">
+    <h1 class="text-2xl font-black text-white tracking-wider">Boñga<span class="text-cyan-400">Track</span></h1>
+    <span class="hidden sm:inline-block bg-slate-700 text-cyan-300 text-xs px-2.5 py-1 rounded-full font-semibold border border-slate-600">BRGY. 53, LEGAZPI CITY</span>
+  </div>
+  <div class="hidden md:flex items-center space-x-6 text-sm font-semibold">
+    <a href="/" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-chart-line mr-2"></i>DASHBOARD</a>
+    <a href="/registration" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-user-plus mr-2"></i>REGISTRATION</a>
+    <a href="/hazard-map" class="text-cyan-400 flex items-center"><i class="fas fa-map-location-dot mr-2"></i>EVACUATION MAP</a>
+    <a href="/inventory" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-boxes mr-2"></i>INVENTORY</a>
+    <a href="/analytics" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-chart-pie mr-2"></i>ANALYTICS</a>
+    <a href="/sms" class="text-slate-300 hover:text-white flex items-center"><i class="fas fa-sms mr-2"></i>SMS ALERTS</a>
+  </div>
+  <button onclick="document.getElementById('mobileMenu').classList.toggle('hidden')" aria-label="Menu" class="md:hidden bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 w-10 h-10 rounded-xl flex items-center justify-center"><i class="fas fa-bars"></i></button>
+</nav>
+<div id="mobileMenu" class="hidden md:hidden bg-slate-800 border-b border-slate-700 px-6 py-3 space-y-1 text-sm font-semibold">
+  <a href="/" class="block py-2 text-slate-300">Dashboard</a>
+  <a href="/registration" class="block py-2 text-slate-300">Registration</a>
+  <a href="/hazard-map" class="block py-2 text-cyan-400">Evacuation map</a>
+  <a href="/inventory" class="block py-2 text-slate-300">Inventory</a>
+  <a href="/analytics" class="block py-2 text-slate-300">Analytics</a>
+  <a href="/sms" class="block py-2 text-slate-300">SMS alerts</a>
+</div>
+
+<main class="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
+
+  <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl md:text-3xl font-black text-white">Where to go, and what to avoid</h2>
+      <p class="text-slate-400 text-sm mt-1">Evacuation centres, hazard zones and the safest way out of Barangay Boñga.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button id="btnRouteMe" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition shadow-lg flex items-center">
+        <i class="fas fa-route mr-2"></i>Route me to the nearest shelter
+      </button>
+      <button id="btnLocate" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-sm transition flex items-center">
+        <i class="fas fa-location-crosshairs mr-2"></i>Find me
+      </button>
+      <button id="btnFit" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-sm transition flex items-center">
+        <i class="fas fa-expand mr-2"></i>Fit barangay
+      </button>
+    </div>
+  </div>
+
+  <div id="dataBanner" class="hidden bg-amber-950/50 border border-amber-500/60 text-amber-200 text-xs md:text-sm rounded-xl px-4 py-3 flex items-start gap-3">
+    <i class="fas fa-triangle-exclamation mt-0.5"></i>
+    <span id="dataBannerText"></span>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+    <div class="lg:col-span-3 bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-lg">
+      <div id="hazardMap"></div>
+      <div class="border-t border-slate-700 px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-300">
+        <span><i class="fas fa-circle text-cyan-500 mr-1.5"></i>Evacuation centre</span>
+        <span><i class="fas fa-circle text-amber-500 mr-1.5"></i>Assembly point</span>
+        <span><i class="fas fa-circle text-emerald-500 mr-1.5"></i>Household, outside hazard</span>
+        <span><i class="fas fa-circle text-red-500 mr-1.5"></i>Household inside hazard</span>
+        <span><i class="fas fa-minus text-red-400 mr-1.5"></i>Lahar corridor</span>
+        <span><i class="fas fa-minus text-sky-400 mr-1.5"></i>Flood / surge</span>
+        <span><i class="fas fa-minus text-emerald-400 mr-1.5"></i>Official evacuation route</span>
+      </div>
+    </div>
+
+    <aside class="space-y-4">
+
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+            <p class="text-[11px] text-slate-400">Households at risk</p>
+            <p id="statAtRisk" class="text-3xl font-black text-red-400 mt-1">0</p>
+          </div>
+          <div class="bg-slate-900/70 border border-slate-700 rounded-xl p-3">
+            <p class="text-[11px] text-slate-400">Tracked on map</p>
+            <p id="statTracked" class="text-3xl font-black text-white mt-1">0</p>
+          </div>
+        </div>
+        <p id="riskCaption" class="text-[11px] text-slate-400 mt-2">Waiting for GPS pings from resident devices.</p>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-white mb-3">Shelters</h3>
+        <div id="centerList" class="space-y-2 text-sm"></div>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-bold text-white">Households inside a hazard zone</h3>
+          <button id="btnRefresh" class="text-cyan-400 hover:text-cyan-300 text-xs font-bold"><i class="fas fa-rotate mr-1"></i>Refresh</button>
+        </div>
+        <div id="riskList" class="panel space-y-2 max-h-60 overflow-y-auto pr-1 text-sm">
+          <p class="text-slate-500 text-xs">No household GPS positions fall inside a mapped hazard zone.</p>
+        </div>
+      </div>
+
+      <div id="routePanel" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-bold text-white">Your route</h3>
+          <button onclick="clearRoute()" class="text-slate-400 hover:text-white text-xs"><i class="fas fa-xmark mr-1"></i>Clear</button>
+        </div>
+        <p id="routeSummary" class="text-xs text-slate-300 mb-3"></p>
+        <ol id="routeSteps" class="panel space-y-2 max-h-52 overflow-y-auto text-xs text-slate-300 pl-3 step-line"></ol>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-white mb-2">Trace a zone</h3>
+        <p class="text-[11px] text-slate-400 mb-3" id="drawHint">Click the map to drop points along a real hazard boundary or evacuation route, then save it so everyone sees it.</p>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <select id="drawType" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+            <option value="lahar">Lahar corridor (line)</option>
+            <option value="flood">Flood / surge area (shape)</option>
+            <option value="route">Evacuation route (line)</option>
+            <option value="assembly">Assembly point (single pin)</option>
+          </select>
+          <input id="drawName" placeholder="Name it" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white">
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="btnDraw" class="bg-slate-700 hover:bg-slate-600 text-cyan-300 border border-slate-600 rounded-lg px-3 py-1.5 text-xs font-bold">Start tracing</button>
+          <button id="btnUndo" class="bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg px-3 py-1.5 text-xs font-bold">Undo point</button>
+          <button id="btnSaveZone" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-xs font-bold">Save zone</button>
+        </div>
+        <p id="drawFeedback" class="text-[11px] mt-2 text-slate-400"></p>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-white mb-2">Assembly points</h3>
+        <p class="text-[11px] text-slate-400 mb-3">Move re-places a point by clicking its new spot on the map; Delete removes it. Both save immediately.</p>
+        <div id="assemblyList" class="space-y-2 text-xs"></div>
+      </div>
+
+    </aside>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ------------------------------------------------------------------
+   BoñgaTrack evacuation map
+   Hazard geometry comes from /api/hazard-zones (hazard_zones.json).
+   Nothing here is authoritative until the barangay traces the real
+   PHIVOLCS / CDRRMO boundaries and saves them.
+------------------------------------------------------------------ */
+
+const FALLBACK = {
+  barangay: { name: "Barangay Boñga", center: [13.1391, 123.7438], zoom: 15 },
+  volcano: { name: "Mayon Volcano", summit: [13.2572, 123.6856], zones: [
+    { radius_km: 6, label: "Permanent Danger Zone (6 km)", severity: "extreme" },
+    { radius_km: 7, label: "Extended Danger Zone (7 km)", severity: "high" },
+    { radius_km: 8, label: "Extended Danger Zone (8 km)", severity: "moderate" }]},
+  evacuation_centers: [], assembly_points: [], lahar_corridors: [], flood_zones: [], routes: []
+};
+
+let CONFIG = FALLBACK;
+let map, layers = {}, residentMarkers = [], routeLayer = null, meMarker = null;
+let myPosition = null, occupancy = {}, hazardShapes = [];
+
+const SEVERITY = {
+  extreme:  { color: "#ef4444", fill: 0.22 },
+  high:     { color: "#f97316", fill: 0.16 },
+  moderate: { color: "#eab308", fill: 0.10 }
+};
+
+/* ---------------- geometry helpers ---------------- */
+function haversine(a, b) {
+  const R = 6371000, rad = x => x * Math.PI / 180;
+  const dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
+  const s = Math.sin(dLat/2)**2 + Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function pointInPolygon(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const yi = poly[i][0], xi = poly[i][1], yj = poly[j][0], xj = poly[j][1];
+    if ((xi > p[1]) !== (xj > p[1]) &&
+        p[0] < (yj - yi) * (p[1] - xi) / (xj - xi) + yi) inside = !inside;
+  }
+  return inside;
+}
+// Turn a centreline + width into a ribbon polygon (metres -> degrees).
+function ribbon(centerline, widthM) {
+  const half = widthM / 2, left = [], right = [];
+  for (let i = 0; i < centerline.length; i++) {
+    const prev = centerline[Math.max(0, i - 1)], next = centerline[Math.min(centerline.length - 1, i + 1)];
+    const latScale = 111320, lonScale = 111320 * Math.cos(centerline[i][0] * Math.PI / 180);
+    let dx = (next[1] - prev[1]) * lonScale, dy = (next[0] - prev[0]) * latScale;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    left.push([centerline[i][0] + (ny * half) / latScale, centerline[i][1] + (nx * half) / lonScale]);
+    right.push([centerline[i][0] - (ny * half) / latScale, centerline[i][1] - (nx * half) / lonScale]);
+  }
+  return left.concat(right.reverse());
+}
+function hazardAt(point) {
+  for (const s of hazardShapes) {
+    if (s.kind === "circle" && haversine(point, s.center) <= s.radius) return s;
+    if (s.kind === "polygon" && pointInPolygon(point, s.polygon)) return s;
+  }
+  return null;
+}
+function icon(cls, glyph) {
+  return L.divIcon({ className: "", iconSize: [0, 0],
+    html: `<div class="pin ${cls}" style="transform:translate(-50%,-50%)">${glyph || ""}</div>` });
+}
+
+/* ---------------- map ---------------- */
+function initMap() {
+  const b = CONFIG.barangay || FALLBACK.barangay;
+  map = L.map("hazardMap", { zoomControl: true }).setView(b.center, b.zoom || 15);
+
+  const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+  const topo = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+    maxZoom: 17, attribution: "&copy; OpenTopoMap, OpenStreetMap contributors" });
+  const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 19, attribution: "Imagery &copy; Esri" });
+
+  layers = {
+    danger: L.layerGroup().addTo(map),
+    lahar: L.layerGroup().addTo(map),
+    flood: L.layerGroup().addTo(map),
+    centers: L.layerGroup().addTo(map),
+    assembly: L.layerGroup().addTo(map),
+    routes: L.layerGroup().addTo(map),
+    residents: L.layerGroup().addTo(map),
+    draw: L.layerGroup().addTo(map)
+  };
+
+  L.control.layers(
+    { "Street map": street, "Terrain": topo, "Satellite": sat },
+    { "Volcano danger zones": layers.danger, "Lahar corridors": layers.lahar,
+      "Flood / storm surge": layers.flood, "Evacuation centres": layers.centers,
+      "Assembly points": layers.assembly, "Official routes": layers.routes,
+      "Household positions": layers.residents },
+    { collapsed: window.innerWidth < 1024 }
+  ).addTo(map);
+
+  map.on("click", onMapClick);
+}
+
+function drawHazards() {
+  hazardShapes = [];
+  Object.values(layers).forEach(l => l !== layers.draw && l.clearLayers());
+
+  const v = CONFIG.volcano;
+  if (v && v.summit) {
+    (v.zones || []).slice().sort((a, b) => b.radius_km - a.radius_km).forEach(z => {
+      const s = SEVERITY[z.severity] || SEVERITY.moderate;
+      L.circle(v.summit, { radius: z.radius_km * 1000, color: s.color, weight: 1.5,
+        dashArray: "6 6", fillColor: s.color, fillOpacity: s.fill })
+        .bindPopup(`<b>${z.label}</b><br>${v.name}. Entry restricted during an alert level raise.`)
+        .addTo(layers.danger);
+      hazardShapes.push({ kind: "circle", center: v.summit, radius: z.radius_km * 1000, label: z.label });
+    });
+  }
+
+  (CONFIG.lahar_corridors || []).forEach(c => {
+    const poly = ribbon(c.centerline, c.width_m || 200);
+    L.polygon(poly, { color: "#f87171", weight: 1, fillColor: "#ef4444", fillOpacity: 0.28 })
+      .bindPopup(`<b>${c.name}</b><br>Lahar / debris flow path. Never cross this channel during heavy rain.${c.notes ? "<br><span style='color:#94a3b8'>" + c.notes + "</span>" : ""}`)
+      .addTo(layers.lahar);
+    L.polyline(c.centerline, { color: "#ef4444", weight: 2, opacity: 0.9, dashArray: "4 5" }).addTo(layers.lahar);
+    hazardShapes.push({ kind: "polygon", polygon: poly, label: c.name });
+  });
+
+  (CONFIG.flood_zones || []).forEach(f => {
+    L.polygon(f.polygon, { color: "#38bdf8", weight: 1.5, fillColor: "#0ea5e9", fillOpacity: 0.22 })
+      .bindPopup(`<b>${f.name}</b><br>Flooding and storm surge expected here.${f.notes ? "<br><span style='color:#94a3b8'>" + f.notes + "</span>" : ""}`)
+      .addTo(layers.flood);
+    hazardShapes.push({ kind: "polygon", polygon: f.polygon, label: f.name });
+  });
+
+  (CONFIG.routes || []).forEach(r => {
+    const open = (r.status || "open") !== "blocked";
+    L.polyline(r.path, { color: open ? "#34d399" : "#64748b", weight: 5, opacity: 0.9,
+      dashArray: open ? null : "8 8" })
+      .bindPopup(`<b>${r.name}</b><br>${open ? "Open" : "Reported blocked"} · leads to ${r.to || "an evacuation centre"}.${r.notes ? "<br><span style='color:#94a3b8'>" + r.notes + "</span>" : ""}`)
+      .addTo(layers.routes);
+  });
+
+  drawAssemblyPoints();
+  drawCenters();
+}
+
+function drawAssemblyPoints() {
+  layers.assembly.clearLayers();
+  const list = document.getElementById("assemblyList");
+  list.innerHTML = "";
+
+  (CONFIG.assembly_points || []).forEach((a, idx) => {
+    L.marker(a.coords, { icon: icon("pin-assembly", '<i class="fas fa-flag"></i>') })
+      .bindPopup(`<b>${a.name}</b><br>Gather here before moving as a group.`)
+      .addTo(layers.assembly);
+
+    list.insertAdjacentHTML("beforeend", `
+      <div class="flex items-center justify-between bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2">
+        <button class="text-left text-white font-semibold truncate mr-2" onclick="map.setView([${a.coords[0]},${a.coords[1]}], 17)">${a.name}</button>
+        <span class="flex gap-1 shrink-0">
+          <button onclick="startMoveAssembly(${idx})" class="bg-slate-700 hover:bg-slate-600 text-cyan-300 border border-slate-600 rounded px-2 py-1 text-[10px] font-bold">Move</button>
+          <button onclick="deleteAssembly(${idx})" class="bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded px-2 py-1 text-[10px] font-bold">Delete</button>
+        </span>
+      </div>`);
+  });
+
+  if (!(CONFIG.assembly_points || []).length) {
+    list.innerHTML = `<p class="text-slate-500 text-xs">No assembly points yet. Use "Trace a zone" below, type "Assembly point", name it, then click the map.</p>`;
+  }
+}
+
+let movingAssemblyIndex = null;
+
+function startMoveAssembly(idx) {
+  movingAssemblyIndex = idx;
+  drawing = false;
+  document.getElementById("btnDraw").innerText = "Start tracing";
+  feedback(`Click the map to move "${CONFIG.assembly_points[idx].name}".`, "text-cyan-300");
+}
+
+async function deleteAssembly(idx) {
+  const point = CONFIG.assembly_points[idx];
+  if (!confirm(`Remove assembly point "${point.name}"?`)) return;
+  CONFIG.assembly_points.splice(idx, 1);
+  await persistConfig(`Removed assembly point "${point.name}".`);
+  drawAssemblyPoints();
+}
+
+async function persistConfig(successMessage) {
+  try {
+    const res = await fetch("/api/hazard-zones", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(CONFIG)
+    });
+    const d = await res.json();
+    if (d.status !== "success") throw new Error(d.message || "Save rejected");
+    feedback(successMessage, "text-emerald-400");
+  } catch (e) {
+    feedback("Change made on this screen only — the server refused the save. Sign in as admin and try again.", "text-amber-400");
+  }
+}
+
+function drawCenters() {
+  layers.centers.clearLayers();
+  const list = document.getElementById("centerList");
+  list.innerHTML = "";
+
+  (CONFIG.evacuation_centers || []).forEach(c => {
+    const used = occupancy[c.name] || 0;
+    const cap = c.capacity || 0;
+    const pct = cap ? Math.min(100, Math.round((used / cap) * 100)) : 0;
+    const bar = pct >= 90 ? "bg-red-500" : pct >= 60 ? "bg-amber-500" : "bg-emerald-500";
+
+    L.marker(c.coords, { icon: icon("pin-center", '<i class="fas fa-house-chimney-user"></i>') })
+      .bindPopup(
+        `<b>${c.name}</b><br>${used} of ${cap || "?"} people checked in` +
+        (c.notes ? `<br><span style="color:#94a3b8">${c.notes}</span>` : "") +
+        `<br><a href="#" style="color:#67e8f9" onclick="routeTo(${c.coords[0]},${c.coords[1]},'${c.name.replace(/'/g, "")}');return false;">Route me here</a>`)
+      .addTo(layers.centers);
+
+    list.insertAdjacentHTML("beforeend", `
+      <button class="w-full text-left bg-slate-900/70 hover:bg-slate-900 border border-slate-700 rounded-xl p-3 transition"
+              onclick="map.setView([${c.coords[0]},${c.coords[1]}], 17)">
+        <p class="font-bold text-white text-[13px] leading-snug">${c.name}</p>
+        <div class="h-1.5 bg-slate-700 rounded-full mt-2 overflow-hidden"><div class="h-full ${bar}" style="width:${pct}%"></div></div>
+        <p class="text-[11px] text-slate-400 mt-1">${used} checked in${cap ? " · capacity " + cap : ""}</p>
+      </button>`);
+  });
+
+  if (!list.children.length) {
+    list.innerHTML = `<p class="text-slate-500 text-xs">No evacuation centre is listed yet. Add one to hazard_zones.json.</p>`;
+  }
+}
+
+/* ---------------- live data ---------------- */
+async function loadOccupancy() {
+  try {
+    const r = await fetch("/api/dashboard-analytics");
+    const d = await r.json();
+    occupancy = {};
+    (CONFIG.evacuation_centers || []).forEach(c => {
+      const match = (d.centers || []).find(x =>
+        x.name.toLowerCase().includes((c.short || "").toLowerCase()) ||
+        c.name.toLowerCase().includes(x.name.toLowerCase().split(" ")[1] || "@"));
+      occupancy[c.name] = match ? match.current_occupancy : 0;
+    });
+    drawCenters();
+  } catch (e) { /* offline: keep the last numbers */ }
+}
+
+async function loadResidents() {
+  try {
+    const r = await fetch("/api/live_locations");
+    const locs = await r.json();
+    layers.residents.clearLayers();
+    const riskList = document.getElementById("riskList");
+    let atRisk = 0, tracked = 0;
+    riskList.innerHTML = "";
+
+    locs.forEach(loc => {
+      if (loc.lat == null || loc.lon == null) return;
+      tracked++;
+      const hz = hazardAt([loc.lat, loc.lon]);
+      L.marker([loc.lat, loc.lon], { icon: icon(hz ? "pin-risk" : "pin-safe") })
+        .bindPopup(`<b>${loc.name}</b><br>${loc.resident_id}<br>` +
+          (hz ? `<span style="color:#fca5a5">Inside: ${hz.label}</span>` : `<span style="color:#6ee7b7">Outside mapped hazard zones</span>`))
+        .addTo(layers.residents);
+
+      if (hz) {
+        atRisk++;
+        riskList.insertAdjacentHTML("beforeend", `
+          <button class="w-full text-left bg-red-950/40 hover:bg-red-950/70 border border-red-800/60 rounded-lg p-2.5 transition"
+                  onclick="map.setView([${loc.lat},${loc.lon}], 17)">
+            <p class="font-bold text-white text-[13px]">${loc.name}</p>
+            <p class="text-[11px] text-red-300">${loc.resident_id} · ${hz.label}</p>
+          </button>`);
+      }
+    });
+
+    document.getElementById("statAtRisk").innerText = atRisk;
+    document.getElementById("statTracked").innerText = tracked;
+    document.getElementById("riskCaption").innerText = tracked
+      ? `${tracked} household${tracked === 1 ? "" : "s"} sharing location right now.`
+      : "Waiting for GPS pings from resident devices.";
+    if (!atRisk) riskList.innerHTML = `<p class="text-slate-500 text-xs">No household GPS position falls inside a mapped hazard zone.</p>`;
+  } catch (e) { /* offline */ }
+}
+
+/* ---------------- routing ---------------- */
+function hazardExposure(coords) {
+  let hits = 0;
+  for (let i = 0; i < coords.length; i += Math.max(1, Math.floor(coords.length / 120))) {
+    if (hazardAt(coords[i])) hits++;
+  }
+  return hits;
+}
+
+async function osrm(from, to) {
+  const base = "https://router.project-osrm.org/route/v1";
+  for (const profile of ["foot", "driving"]) {
+    try {
+      const url = `${base}/${profile}/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson&steps=true&alternatives=true`;
+      const res = await fetch(url);
+      const d = await res.json();
+      if (d.routes && d.routes.length) return d.routes;
+    } catch (e) { /* try next profile */ }
+  }
+  return null;
+}
+
+async function routeTo(lat, lon, name) {
+  if (!myPosition) { const ok = await locate(); if (!ok) return; }
+  const panel = document.getElementById("routePanel");
+  const summary = document.getElementById("routeSummary");
+  const steps = document.getElementById("routeSteps");
+  panel.classList.remove("hidden");
+  summary.innerText = "Working out the safest way there…";
+  steps.innerHTML = "";
+
+  const routes = await osrm(myPosition, [lat, lon]);
+  clearRoute();
+
+  if (!routes) {
+    const straight = [myPosition, [lat, lon]];
+    routeLayer = L.polyline(straight, { color: "#a855f7", weight: 4, dashArray: "8 8" }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+    summary.innerHTML = `No road directions available offline. Straight-line distance to <b>${name}</b>: ${(haversine(myPosition,[lat,lon])/1000).toFixed(2)} km. Follow the official route lines on the map.`;
+    return;
+  }
+
+  const scored = routes.map(r => {
+    const coords = r.geometry.coordinates.map(c => [c[1], c[0]]);
+    return { r, coords, exposure: hazardExposure(coords) };
+  }).sort((a, b) => a.exposure - b.exposure || a.r.distance - b.r.distance);
+
+  const best = scored[0];
+  routeLayer = L.layerGroup([
+    L.polyline(best.coords, { color: "#0f172a", weight: 9, opacity: 0.6 }),
+    L.polyline(best.coords, { color: best.exposure ? "#f59e0b" : "#22d3ee", weight: 5 })
+  ]).addTo(map);
+  map.fitBounds(L.polyline(best.coords).getBounds(), { padding: [50, 50] });
+
+  const km = (best.r.distance / 1000).toFixed(2);
+  const mins = Math.max(1, Math.round(best.r.duration / 60));
+  summary.innerHTML = `<b>${name}</b> · ${km} km · about ${mins} min on foot<br>` +
+    (best.exposure
+      ? `<span class="text-amber-400">This route still passes a mapped hazard zone. Take it only if the barangay says the area is clear.</span>`
+      : `<span class="text-emerald-400">This route stays clear of every mapped hazard zone.</span>`) +
+    (scored.length > 1 ? `<br><span class="text-slate-400">Chosen from ${scored.length} options by hazard exposure.</span>` : "");
+
+  (best.r.legs?.[0]?.steps || []).forEach(s => {
+    const t = s.maneuver?.type || "continue";
+    const road = s.name ? ` onto ${s.name}` : "";
+    steps.insertAdjacentHTML("beforeend",
+      `<li class="pl-3">${t.replace(/-/g, " ")}${road} · ${Math.round(s.distance)} m</li>`);
+  });
+}
+
+function clearRoute() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+}
+
+async function nearestShelter() {
+  if (!myPosition) { const ok = await locate(); if (!ok) return; }
+  const centers = (CONFIG.evacuation_centers || []).filter(c => {
+    const hz = hazardAt(c.coords);
+    return !hz || hz.label.indexOf("8 km") > -1;   // skip shelters sitting in a severe zone
+  });
+  const pool = centers.length ? centers : (CONFIG.evacuation_centers || []);
+  if (!pool.length) return;
+  pool.sort((a, b) => haversine(myPosition, a.coords) - haversine(myPosition, b.coords));
+  routeTo(pool[0].coords[0], pool[0].coords[1], pool[0].name);
+}
+
+function locate() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { alert("This device can't share its location."); return resolve(false); }
+    navigator.geolocation.getCurrentPosition(pos => {
+      myPosition = [pos.coords.latitude, pos.coords.longitude];
+      if (meMarker) map.removeLayer(meMarker);
+      meMarker = L.marker(myPosition, { icon: icon("pin-me", '<i class="fas fa-person"></i>') })
+        .bindPopup("You are here").addTo(map);
+      map.setView(myPosition, 17);
+      const hz = hazardAt(myPosition);
+      if (hz) meMarker.bindPopup(`You are inside <b>${hz.label}</b>. Move to a shelter now.`).openPopup();
+      resolve(true);
+    }, err => {
+      alert("Location is off or blocked. Turn on GPS and allow location for this site, then try again.");
+      resolve(false);
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+}
+
+/* ---------------- tracing new zones ---------------- */
+let drawing = false, drawPoints = [], drawPreview = null;
+
+function onMapClick(e) {
+  if (movingAssemblyIndex !== null) {
+    CONFIG.assembly_points[movingAssemblyIndex].coords = [e.latlng.lat, e.latlng.lng];
+    const name = CONFIG.assembly_points[movingAssemblyIndex].name;
+    movingAssemblyIndex = null;
+    persistConfig(`Moved "${name}".`).then(() => drawAssemblyPoints());
+    return;
+  }
+  if (!drawing) return;
+  if (document.getElementById("drawType").value === "assembly") {
+    drawPoints = [[e.latlng.lat, e.latlng.lng]];
+  } else {
+    drawPoints.push([e.latlng.lat, e.latlng.lng]);
+  }
+  renderDraw();
+}
+function renderDraw() {
+  layers.draw.clearLayers();
+  if (!drawPoints.length) return;
+  const type = document.getElementById("drawType").value;
+  drawPoints.forEach(p => L.circleMarker(p, { radius: type === "assembly" ? 7 : 4, color: "#22d3ee", fillOpacity: 1 }).addTo(layers.draw));
+  if (type !== "assembly" && drawPoints.length > 1) {
+    drawPreview = type === "flood"
+      ? L.polygon(drawPoints, { color: "#22d3ee", weight: 2, fillOpacity: 0.15 })
+      : L.polyline(drawPoints, { color: "#22d3ee", weight: 4, dashArray: "6 6" });
+    drawPreview.addTo(layers.draw);
+  }
+  feedback(type === "assembly" ? "Point placed. Click again to move it, or Save." : `${drawPoints.length} point${drawPoints.length === 1 ? "" : "s"} placed.`, "text-cyan-300");
+}
+function feedback(msg, cls) {
+  const el = document.getElementById("drawFeedback");
+  el.className = `text-[11px] mt-2 ${cls || "text-slate-400"}`;
+  el.innerText = msg;
+}
+
+async function saveZone() {
+  const type = document.getElementById("drawType").value;
+  const name = (document.getElementById("drawName").value || "").trim();
+  const min = type === "assembly" ? 1 : type === "flood" ? 3 : 2;
+  if (!name) return feedback("Give it a name first.", "text-amber-400");
+  if (drawPoints.length < min) return feedback(
+    type === "assembly" ? "Click the map to place the point." : `Place at least ${min} points.`,
+    "text-amber-400");
+
+  if (type === "lahar") CONFIG.lahar_corridors.push({ name, width_m: 200, severity: "high", centerline: drawPoints.slice() });
+  else if (type === "flood") CONFIG.flood_zones.push({ name, severity: "moderate", polygon: drawPoints.slice() });
+  else if (type === "assembly") CONFIG.assembly_points.push({ name, coords: drawPoints[0].slice() });
+  else CONFIG.routes.push({ name, to: "", status: "open", path: drawPoints.slice() });
+
+  await persistConfig("Saved. Everyone opening this map now sees it.");
+
+  drawing = false; drawPoints = []; layers.draw.clearLayers();
+  document.getElementById("drawName").value = "";
+  document.getElementById("btnDraw").innerText = "Start tracing";
+  drawHazards();
+  loadResidents();
+}
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  try {
+    const res = await fetch("/api/hazard-zones");
+    const d = await res.json();
+    if (d && d.barangay) CONFIG = Object.assign({}, FALLBACK, d);
+  } catch (e) {
+    banner("Hazard zones couldn't be loaded, so only the default Mayon danger radii are shown. Check that hazard_zones.json sits beside app.py.");
+  }
+  CONFIG.lahar_corridors = CONFIG.lahar_corridors || [];
+  CONFIG.flood_zones = CONFIG.flood_zones || [];
+  CONFIG.routes = CONFIG.routes || [];
+  CONFIG.assembly_points = CONFIG.assembly_points || [];
+
+  initMap();
+  drawHazards();
+  await loadOccupancy();
+  await loadResidents();
+
+  if (CONFIG._note) banner(CONFIG._note);
+
+  setInterval(() => { loadOccupancy(); loadResidents(); }, 15000);
+}
+
+function banner(text) {
+  document.getElementById("dataBannerText").innerText = text;
+  document.getElementById("dataBanner").classList.remove("hidden");
+}
+
+document.getElementById("btnRouteMe").onclick = nearestShelter;
+document.getElementById("btnLocate").onclick = locate;
+document.getElementById("btnFit").onclick = () => {
+  const pts = [];
+  (CONFIG.evacuation_centers || []).forEach(c => pts.push(c.coords));
+  (CONFIG.assembly_points || []).forEach(a => pts.push(a.coords));
+  pts.length ? map.fitBounds(L.latLngBounds(pts).pad(0.6)) : map.setView(CONFIG.barangay.center, 15);
+};
+document.getElementById("btnRefresh").onclick = () => { loadOccupancy(); loadResidents(); };
+document.getElementById("btnDraw").onclick = function () {
+  movingAssemblyIndex = null;
+  drawing = !drawing;
+  const type = document.getElementById("drawType").value;
+  this.innerText = drawing ? "Stop tracing" : "Start tracing";
+  feedback(drawing
+    ? (type === "assembly" ? "Click the map to place the assembly point." : "Click along the boundary or route on the map.")
+    : "Tracing paused.");
+};
+document.getElementById("btnUndo").onclick = () => { drawPoints.pop(); renderDraw(); };
+document.getElementById("btnSaveZone").onclick = saveZone;
+document.getElementById("drawType").onchange = renderDraw;
+
+boot();
+</script>
+</body>
+</html>

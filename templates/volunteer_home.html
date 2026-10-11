@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Volunteer Home - BoñgaTrack{% endblock %}
+
+{% block content %}
+<main class="container mx-auto max-w-2xl px-4 py-8 flex-grow relative z-10">
+
+    <div class="flex items-center justify-between mb-6 border-b border-slate-700 pb-4">
+        <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-500 flex items-center justify-center">
+                <i class="fas fa-hands-helping text-white text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xs text-cyan-400 font-bold uppercase tracking-wider">Barangay Boñga Volunteer</p>
+                <h1 class="text-2xl font-black text-white">{{ name }}</h1>
+                <p class="text-[11px] text-gray-400 font-mono">{{ vid }}</p>
+            </div>
+        </div>
+        <button onclick="volunteerLogout()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-red-600/30 border border-slate-600 hover:border-red-500/60 text-gray-300 hover:text-red-300 text-sm font-bold transition">
+            <i class="fas fa-power-off mr-1"></i> Log out
+        </button>
+    </div>
+
+    {% if must_change_pin %}
+    <div id="pinBanner" class="mb-6 bg-amber-900/30 border border-amber-500/60 rounded-xl p-4 flex items-start space-x-3">
+        <i class="fas fa-key text-amber-400 mt-0.5"></i>
+        <div class="text-sm">
+            <p class="font-bold text-amber-300">Set your own PIN</p>
+            <p class="text-amber-100/80 text-xs mt-0.5">The admin gave you a starter PIN. Please change it below so only you know it.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 gap-4 mb-8">
+        <a href="/inventory" class="block bg-slate-900/60 hover:bg-slate-800/80 border border-slate-700/60 hover:border-cyan-500/60 rounded-2xl p-6 shadow-xl transition">
+            <div class="flex items-center space-x-4">
+                <div class="w-14 h-14 rounded-2xl bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center shrink-0">
+                    <i class="fas fa-qrcode text-2xl text-cyan-400"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-white">Relief Inventory &amp; Distribution</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Log incoming stock, and scan a resident's QR code (or type their ID) when they claim relief goods.</p>
+                </div>
+            </div>
+        </a>
+
+        <a href="/registration" class="block bg-slate-900/60 hover:bg-slate-800/80 border border-slate-700/60 hover:border-emerald-500/60 rounded-2xl p-6 shadow-xl transition">
+            <div class="flex items-center space-x-4">
+                <div class="w-14 h-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                    <i class="fas fa-user-plus text-2xl text-emerald-400"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-white">Registration &amp; Evacuee Check-in</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Register a new household, or scan residents as they arrive at the evacuation center.</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 shadow-xl">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-1"><i class="fas fa-lock text-cyan-400 mr-2"></i>Change my PIN</h2>
+        <p class="text-[11px] text-gray-400 mb-4">4 to 8 digits. Everything you do is saved under your name for the barangay admin.</p>
+        <div class="space-y-3">
+            <div class="relative">
+                <input type="password" id="oldPin" inputmode="numeric" autocomplete="current-password" placeholder="Current PIN" class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-4 pr-12 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+                <button type="button" onclick="togglePin('oldPin', this)" tabindex="-1" aria-label="Show PIN" class="absolute inset-y-0 right-0 flex items-center justify-center w-11 text-gray-400 hover:text-cyan-400 transition">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
+            <div class="relative">
+                <input type="password" id="newPin" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="New PIN" class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-4 pr-12 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+                <button type="button" onclick="togglePin('newPin', this)" tabindex="-1" aria-label="Show PIN" class="absolute inset-y-0 right-0 flex items-center justify-center w-11 text-gray-400 hover:text-cyan-400 transition">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
+            <div class="relative">
+                <input type="password" id="newPin2" inputmode="numeric" autocomplete="new-password" maxlength="8" placeholder="Type the new PIN again" class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-4 pr-12 py-2.5 text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500">
+                <button type="button" onclick="togglePin('newPin2', this)" tabindex="-1" aria-label="Show PIN" class="absolute inset-y-0 right-0 flex items-center justify-center w-11 text-gray-400 hover:text-cyan-400 transition">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </div>
+            <button onclick="changePin()" id="pinBtn" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-white text-sm transition shadow-lg">Update PIN</button>
+            <p id="pinFeedback" class="text-center text-sm font-bold hidden"></p>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function pinMsg(text, good) {
+        const el = document.getElementById("pinFeedback");
+        el.innerText = text;
+        el.className = "text-center text-sm font-bold " + (good ? "text-green-400" : "text-red-400");
+    }
+
+    function togglePin(id, btn) {
+        const input = document.getElementById(id);
+        if (!input) return;
+        const icon = btn.querySelector("i");
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        if (icon) {
+            icon.classList.toggle("fa-eye", !show);
+            icon.classList.toggle("fa-eye-slash", show);
+        }
+        btn.setAttribute("aria-label", show ? "Hide PIN" : "Show PIN");
+        input.focus();
+    }
+
+    async function changePin() {
+        const oldPin = document.getElementById("oldPin").value.trim();
+        const newPin = document.getElementById("newPin").value.trim();
+        const again = document.getElementById("newPin2").value.trim();
+        const btn = document.getElementById("pinBtn");
+
+        if (!/^\d{4,8}$/.test(newPin)) return pinMsg("New PIN must be 4 to 8 digits.", false);
+        if (newPin !== again) return pinMsg("The two new PINs do not match.", false);
+        if (!oldPin) return pinMsg("Enter your current PIN.", false);
+
+        btn.disabled = true;
+        try {
+            const res = await fetch("/api/volunteer/change-pin", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ old_pin: oldPin, new_pin: newPin })
+            });
+            const data = await res.json();
+            if (data.status === "success") {
+                pinMsg("PIN updated. Use the new PIN next time you log in.", true);
+                ["oldPin", "newPin", "newPin2"].forEach((id) => {
+                    document.getElementById(id).value = "";
+                    document.getElementById(id).type = "password";
+                });
+                document.querySelectorAll(".relative > button[aria-label='Hide PIN']").forEach(function (b) {
+                    b.setAttribute("aria-label", "Show PIN");
+                    const ic = b.querySelector("i");
+                    if (ic) { ic.classList.add("fa-eye"); ic.classList.remove("fa-eye-slash"); }
+                });
+                const banner = document.getElementById("pinBanner");
+                if (banner) banner.remove();
+            } else {
+                pinMsg(data.message || "Could not update the PIN.", false);
+            }
+        } catch (e) {
+            pinMsg("Cannot reach the server.", false);
+        }
+        btn.disabled = false;
+    }
+
+    async function volunteerLogout() {
+        try { await fetch("/api/logout", { method: "POST", keepalive: true }); } catch (e) {}
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.replace("/login?logged_out=true");
+    }
+</script>
+{% endblock %}
